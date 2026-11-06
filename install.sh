@@ -14,6 +14,10 @@
 # Tunables (env):  DISK PROFILE INSTALL_DESKTOP HOSTNAME_ TIMEZONE USER_NAME
 #                  SWAP_SIZE ESP_SIZE TARBALL_URL VERIFY DRY_RUN ASSUME_YES CA_BUNDLE
 #   CA_BUNDLE=/path.pem extra CA file(s) trusted inside the chroot (TLS-inspecting proxy)
+#   EXT4_OPTS="-O ^metadata_csum,^metadata_csum_seed,^orphan_file"  (default) keeps the root
+#               filesystem mountable by the base tarball's old 3.4.51 kernel; set EXT4_OPTS=" "
+#               for modern mkfs defaults once you run your own kernel
+#   SKIP_CHROOT=1       stop after unpacking/configuring (no sorcery/casts); finish later with `resume`
 #   PROFILE=vm          virtio guest (default when DISK is /dev/vd*)
 #   PROFILE=macbookair  i5-4250U / HD 5000 / CS4208 / Apple EFI (default else)
 #   DRY_RUN=1           print every destructive command instead of running it
@@ -52,6 +56,8 @@ USER_NAME="${USER_NAME:-}"                 # optional unprivileged user (you get
 SWAP_SIZE="${SWAP_SIZE:-4G}"; ESP_SIZE="${ESP_SIZE:-512M}"
 VERIFY="${VERIFY:-true}"
 CA_BUNDLE="${CA_BUNDLE:-}"
+EXT4_OPTS="${EXT4_OPTS--O ^metadata_csum,^metadata_csum_seed,^orphan_file}"
+SKIP_CHROOT="${SKIP_CHROOT:-0}"
 TARBALL_URL="${TARBALL_URL:-https://download.sourcemage.org/image/official/test/smgl-test-0.63-20251212_1200-basesystem-x86_64.tar.xz}"
 MNT=/mnt/sourcemage
 SELF_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
@@ -129,7 +135,8 @@ do_fresh() {
   header "Filesystems"
   run mkfs.fat -F32 "$EFI"
   run mkswap "$SWAP"; run swapon "$SWAP"
-  run mkfs.ext4 -F "$ROOT"
+  # shellcheck disable=SC2086  # EXT4_OPTS is intentionally word-split
+  run mkfs.ext4 -F $EXT4_OPTS "$ROOT"
 
   header "Mounting at ${MNT}"
   run mkdir -p "$MNT"
@@ -217,6 +224,14 @@ do_resume() {
 if [[ $MODE == fresh ]]; then do_fresh; else do_resume; fi
 write_profile_config
 [[ $PROFILE == macbookair ]] && install_local_grimoire
+
+if [[ "$SKIP_CHROOT" == 1 ]]; then
+  header "SKIP_CHROOT=1 — base system unpacked and configured; skipping the sorcery/chroot phase"
+  run umount -R "$MNT" || warn "could not unmount everything cleanly"
+  run swapoff "$SWAP" 2>/dev/null || true
+  echo -e "${GREEN}Base installed.${NC} Run ./install.sh resume to sync the grimoire, cast the kernel and bootloader."
+  exit 0
+fi
 
 # ── The in-chroot phase, written out as a real script (no quoting soup) ───────
 header "Preparing chroot"

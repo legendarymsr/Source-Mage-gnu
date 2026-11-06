@@ -5,10 +5,9 @@ system, fstab, chroot, then sync the grimoire and `cast`. **It wipes the target
 disk and is UEFI-only.** Source-based: the kernel (and the desktop, if you
 enable it) are compiled, so budget hours.
 
-> **Status: not yet run end to end.** The scripts pass `bash -n` and a
-> `DRY_RUN=1` walkthrough, and the tarball, checksum and spell names were
-> checked against the live download server and the grimoire inside the tarball.
-> Nobody has booted a result yet. Expect to fix something on the first real run.
+> **Status: partly tested — see "Test status" below.** The installer was run in QEMU
+> up to a booting base system; the compile steps (kernel, `grub2`, desktop) and real
+> hardware have not been exercised. Expect to fix something on the first real run.
 
 ## Install it in a VM (KVM)
 
@@ -39,6 +38,33 @@ PROFILE=macbookair DISK=/dev/sda ./install.sh
 Re-running `./install.sh` on a disk that already has Sorcery resumes (no
 wipe); a failed cast is fixed by running it again. `DRY_RUN=1` prints every
 destructive command instead of running it.
+
+## Test status (QEMU, no KVM, software emulation)
+
+Run end to end in QEMU/OVMF from the Gentoo minimal ISO, following the steps above:
+
+| Step | Result |
+|---|---|
+| `tar xf /dev/vdb` unpack of the installer, documented `install.sh` command | works |
+| GPT partitioning, `mkfs.fat` / `mkswap` / `mkfs.ext4`, UUID `fstab` | works |
+| Download + sha512 verification + unpack of the base tarball, `fresh` over an old install | works |
+| `resume` mode, `scribe update`, spell lookup, interactive `cast` prompts | works; `cast linux` started building `elfutils` |
+| Failure reporting (`FAILED STEPS: …`, non-zero exit) | works |
+| UEFI boot: OVMF → `EFI/BOOT/BOOTX64.EFI` (GRUB 2.14) → kernel → ext4 root mounted → `simpleinit` runs | works with the tarball's stock 3.4.51 kernel |
+| `cast linux`, `cast grub2`, the desktop, a kernel built by the `linux` spell, real hardware | **not tested**: a source build is far too slow without KVM |
+
+Things this uncovered, now handled or worth knowing:
+
+- The base tarball's stock kernel has `VIRTIO_BLK=m` and there is no initramfs, so it
+  cannot boot from `run-vm.sh`'s virtio disk. Build your own kernel with the drivers in.
+- Modern `mkfs.ext4` defaults (`metadata_csum_seed`, …) are rejected by that old kernel,
+  so root is formatted with conservative features (`EXT4_OPTS`, see `install.sh`).
+- The stock kernel gives a **blank VGA screen** under UEFI and `/etc/inittab` has no serial
+  getty; a kernel with `FB_EFI`/`DRM_SIMPLEDRM` fixes the screen.
+- `cast` is interactive (e.g. `elfutils` vs `libelf`, initramfs, optional dependencies, the
+  kernel menu): press Enter for the defaults. Unattended installs are not supported.
+- `SKIP_CHROOT=1` stops after unpacking the base system; `CA_BUNDLE=` trusts an extra CA
+  inside the chroot (TLS-inspecting proxies).
 
 ## What it uses
 
