@@ -1,0 +1,2 @@
+# Sorcery spell files (BUILD, DETAILS, ...) are shell snippets, not Bazel/Starlark
+grimoire/** linguist-language=Shell
