@@ -1,0 +1,16 @@
+           SPELL="slock"
+         VERSION=1.4
+          SOURCE="${SPELL}-${VERSION}.tar.gz"
+   SOURCE_URL[0]="http://dl.suckless.org/tools/${SOURCE}"
+     SOURCE_HASH=sha512:ad285360dd3f16a225159abaf2f82fabf2c675bd74478cf717f68cbe5941a6c620e3c88544ce675ce3ff19af4bb0675c9405685e0f74ee4e84f7d34c61a0532f
+SOURCE_DIRECTORY="${BUILD_DIRECTORY}/${SPELL}-${VERSION}"
+        WEB_SITE="http://tools.suckless.org/slock"
+      LICENSE[0]="MIT"
+         ENTERED="20070625"
+           SHORT="simple X screen locker"
+cat << EOF
+Simple X display locker. Really this is the simplest X screen locker we are
+aware of. It is stable and quite a lot people in this community are using it
+every day when they are out with friends or fetching some food from the local
+pub.
+EOF

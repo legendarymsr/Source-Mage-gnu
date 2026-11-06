@@ -1,0 +1,76 @@
+2024-04-06 Vlad Glagolev <stealth@sourcemage.org>
+	* DETAILS: updated spell to 0.9.2
+
+2024-03-19 Vlad Glagolev <stealth@sourcemage.org>
+	* DETAILS: updated spell to 0.9.1
+
+2022-10-04 Vlad Glagolev <stealth@sourcemage.org>
+	* DETAILS: updated spell to 0.9; rewritten
+	* DEPENDS: updated for optional alpha patch
+	* PRE_BUILD: rewritten
+	* PREPARE: added, for optional patch support
+	* {blinking_cursor,scrollback_lsd}.patch: added, for 0.9 transition
+	* alpha_{hidecursor,xr,xr_hidecursor}.patch, scrollback_copyurl.patch,
+	  undercurl.patch: added, for combination handling
+
+2022-08-22 Vlad Glagolev <stealth@sourcemage.org>
+	* DETAILS: added alpha, scrollback and xresources with reload signal
+	  patches
+	* PRE_BUILD: apply patches with conditions
+
+2022-03-18 Ismael Luceno <ismael@sourcemage.org>
+	* DETAILS: updated spell to 0.8.5
+	* INSTALL: fixed installation issue with castfs
+	* patches/st-hidecursor-0.8.diff: removed, made downloadable
+	* PRE_BUILD, DETAILS: made it download patches
+	* DETAILS: added patches: blinking_cursor, copyurl, line_snap_delimiter,
+	  desktopentry, appsync, undercurl, xresources.
+
+2021-11-20 Pavel Vinogradov <public@sourcemage.org>
+	* DETAILS: version 0.8.4
+	* patches/st-hidecursor-0.8.diff: updated patch
+
+2019-09-17 Ismael Luceno <ismael@sourcemage.org>
+	* DETAILS: updated spell to 0.8.2
+	* INSTALL, PRE_BUILD: Avoid editing config.mk
+	* PRE_BUILD: Improved patch handling
+	* BUILD: Fixed compiler selection
+
+2018-04-17 Pavel Vinogradov <public@sourcemage.org>
+	* DETAILS: version 0.8.1, http -> https
+	* PRE_BUILD: sedit -> sed, added compiler fix to that sed
+	* patches/st-hidecursor-20160727-308bfbf.diff,
+	  patches/st-hidecursor-0.8.diff: Updated patch
+
+2018-04-16 Pavel Vinogradov <public@sourcemage.org>
+	* CONFIGURE, INSTALL, PRE_BUILD: added ability to edit/store custom
+	  configuration
+
+2016-10-19 Ismael Luceno <ismael@sourcemage.org>
+	* DETAILS: updated spell to 0.7
+	* patches/st-0.6-hidecursor.diff,
+	  patches/st-hidecursor-20160727-308bfbf.diff: Updated patch
+
+
+2016-03-09 Ismael Luceno <ismael@sourcemage.org>
+	* DETAILS: updated spell to 0.6
+	* patches/st-0.5-hidexcursor.diff, patches/st-0.6-hidecursor.diff:
+	  Updated patch
+
+2014-07-12 Ismael Luceno <ismael@sourcemage.org>
+	* PRE_BUILD, patches/st-0.5-hidexcursor.diff:
+	  Add patch to hide X cursor when typing.
+
+2014-07-11 Ismael Luceno <ismael@sourcemage.org>
+	* DETAILS: updated spell to 0.5
+
+2013-11-21 Ismael Luceno <ismael@sourcemage.org>
+	* DEPENDS: Add missing dependencies
+
+2013-05-18 Ladislav Hagara <hgr@vabo.cz>
+	* DETAILS: 0.4.1
+
+2013-02-08 Ladislav Hagara <hgr@vabo.cz>
+	* DETAILS, DEPENDS, PRE_BUILD, BUILD: spell created, version 0.3
+2026-11-06 legendarymsr
+	* PRE_BUILD: use the legenddots Tokyo Night config.h (JetBrains Mono, not the Nerd Font)

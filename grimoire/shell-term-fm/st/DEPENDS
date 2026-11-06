@@ -1,0 +1,9 @@
+depends libx11 &&
+depends libxext &&
+depends libxft &&
+depends fontconfig &&
+depends freetype2 &&
+
+if [[ $ST_ALPHA == y ]]; then
+  depends libxrender
+fi

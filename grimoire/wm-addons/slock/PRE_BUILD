@@ -1,0 +1,8 @@
+default_pre_build                                                  &&
+cd $SOURCE_DIRECTORY                                               &&
+# legenddots Tokyo Night config.h (colours, failonclear); user "nobody" / group "nogroup" exist on Source Mage
+cp "${SPELL_DIRECTORY}/config.h" config.h                          &&
+sedit "s:^PREFIX.*:PREFIX= ${INSTALL_ROOT}/usr:" config.mk         &&
+sedit "s:^CFLAGS = -Os \(.*\):CFLAGS = \1 $CFLAGS:" config.mk      &&
+sedit "s:^LDFLAGS = \(.*\):LDFLAGS = \1 $LDFLAGS:" config.mk
+

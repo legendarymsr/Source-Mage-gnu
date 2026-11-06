@@ -65,6 +65,7 @@ carries the fixes found by actually building it:
 | `dunst` | `dunstify` does not compile against libnotify 0.8 | build/install only daemon + `dunstctl` |
 | `libnotify` | man pages default on, need `docbook-xsl-ns` (not in the grimoire) | man/docbook forced off |
 | `libvterm` | demo tools fail to link under `slibtool` | `-L.libs` |
+| `st` 0.9.2, `slock` 1.4 | suckless programs are configured at compile time; the grimoire builds stock defaults | your `legenddots` `config.h` is copied in before the build (Tokyo Night palette, 12px border, bar cursor; slock colours). Only change: font `JetBrains Mono` instead of the Nerd Font variant, which the grimoire does not have. Checked against each version's `config.def.h` (same settings); **not built or run yet** |
 | `broadcom-wl` | does not exist (MacBook WiFi) | new spell, see below |
 
 The installer also pre-seeds answers whose defaults are wrong: `grub2` (default is the BIOS build, so no
