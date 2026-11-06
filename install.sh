@@ -18,6 +18,15 @@
 #               filesystem mountable by the base tarball's old 3.4.51 kernel; set EXT4_OPTS=" "
 #               for modern mkfs defaults once you run your own kernel
 #   SKIP_CHROOT=1       stop after unpacking/configuring (no sorcery/casts); finish later with `resume`
+#   JOBS=N              parallel compile jobs for sorcery and the kernel (default: number of CPUs)
+#   UNATTENDED=1        no questions: stdin is /dev/null so every cast prompt takes its default, and
+#                       the kernel is built from `make defconfig` (boots in QEMU/virtio; for real
+#                       hardware prefer the interactive kernel menu). Pair with ROOT_PASSWORD=...
+#   ROOT_PASSWORD=...   set root's password non-interactively (visible in the environment!); USER_PASSWORD likewise
+#                       (defaults to ROOT_PASSWORD)
+#   SAVE_SPACE=1        do not keep sorcery's binary cache or downloaded sources (small disks)
+#   SKIP_SPELLS="surf"  spells to leave out of the list (surf pulls webkitgtk 2.4: hours and ~20 GB)
+#   SKIP_EFI_CHECK=1    allow running from a non-UEFI host (installing to a disk image / loop device)
 #   PROFILE=vm          virtio guest (default when DISK is /dev/vd*)
 #   PROFILE=macbookair  i5-4250U / HD 5000 / CS4208 / Apple EFI (default else)
 #   DRY_RUN=1           print every destructive command instead of running it
@@ -57,6 +66,10 @@ KB_LAYOUT="${KB_LAYOUT:-se}"           # setxkbmap layout in the bspwm rice (leg
 SWAP_SIZE="${SWAP_SIZE:-4G}"; ESP_SIZE="${ESP_SIZE:-512M}"
 VERIFY="${VERIFY:-true}"
 CA_BUNDLE="${CA_BUNDLE:-}"
+UNATTENDED="${UNATTENDED:-0}"; ROOT_PASSWORD="${ROOT_PASSWORD:-}"; USER_PASSWORD="${USER_PASSWORD:-$ROOT_PASSWORD}"; SAVE_SPACE="${SAVE_SPACE:-0}"
+SKIP_EFI_CHECK="${SKIP_EFI_CHECK:-0}"
+SKIP_SPELLS="${SKIP_SPELLS:-}"
+JOBS="${JOBS:-$(nproc 2>/dev/null || echo 1)}"
 EXT4_OPTS="${EXT4_OPTS--O ^metadata_csum,^metadata_csum_seed,^orphan_file}"
 SKIP_CHROOT="${SKIP_CHROOT:-0}"
 TARBALL_URL="${TARBALL_URL:-https://download.sourcemage.org/image/official/test/smgl-test-0.63-20251212_1200-basesystem-x86_64.tar.xz}"
@@ -67,20 +80,35 @@ TB="${TARBALL_URL##*/}"
 # Spell names below were checked against the grimoire inside the base tarball
 # (codex "test", 2025-12-12). The chroot phase re-checks them and skips (with a
 # warning) any that no longer exist.
-SPELLS_CORE=(linux grub2 efibootmgr dhcpcd openssh sudo)
+SPELLS_CORE=(linux grub2 efibootmgr dhcpcd openssh sudo curl git)   # curl (with TLS) then git: git sources (dzen2) and nvim plugins need https
 SPELLS_VM=()
 SPELLS_MAC=(linux-firmware microcode_ctl alsa-utils broadcom-wl wpa_supplicant)   # broadcom-wl: local grimoire, see grimoire/
 # bspwm rice, same stack as legenddots/bspwm (the grimoire has dzen2, not lemonbar) + neovim.
-SPELLS_DESKTOP=(xorg-server xinit xf86-input-libinput mesa dejavu-ttf ttf-jetbrains-mono
+# xf86-input-evdev instead of -libinput: libinput 1.32 demands Lua >= 5.4 (the grimoire's default lua is 5.1).
+# The libx*/xcb-util-cursor/libnotify entries are optional dependencies that unattended "no" answers would
+# skip, but xsetroot, rofi and dunst cannot build without them: they are cast first (see PRE below).
+SPELLS_DESKTOP=(xserver xinit xf86-input-evdev mesa dejavu-ttf ttf-jetbrains-mono
+                libxcursor xcb-util-cursor libxscrnsaver libxinerama libnotify
                 xsetroot setxkbmap bspwm sxhkd dzen2 picom rofi dunst slock st surf
-                neovim git xclip)
+                neovim git xclip xauth)
 [[ $PROFILE == macbookair ]] && SPELLS_DESKTOP+=(xf86-video-intel)
+
+# Unattended kernel: for the VM profile use kernel/vm.config (defconfig + EFI framebuffer console, Bochs/virtio
+# GPU, PS/2 input; plain defconfig has NO framebuffer console, so a GUI window stays black). Other profiles
+# get plain defconfig; for real hardware use the interactive kernel menu instead.
+KMAKEMODE=defconfig; KRESTORE=""
+if [[ $PROFILE == vm && -f "$SELF_DIR/kernel/vm.config" ]]; then KMAKEMODE=oldconfig; KRESTORE=/etc/sorcery/local/kernel.config; fi
+
+# Mesa's default answers (first choice of every list) are Wayland / ARM / Freedreno / no GLX: unusable
+# on x86 Xorg, and without EGL headers libepoxy (picom) cannot build. Seed an X11 build with GLX + EGL.
+if [[ $PROFILE == macbookair ]]; then MESA_HW="Intel"; MESA_GALLIUM="crocus softpipe"   # HD 5000 = Haswell = crocus
+else MESA_HW="VMware"; MESA_GALLIUM="softpipe virgl"; fi                                  # virtio-gpu = virgl
 
 # ── Pre-flight ────────────────────────────────────────────────────────────────
 if [[ "$DRY_RUN" != 1 ]]; then
   [[ $EUID -eq 0 ]] || die "run as root"
   [[ -b "$DISK" ]]  || die "$DISK is not a block device"
-  [[ -d /sys/firmware/efi ]] || die "not booted in UEFI mode (this installer is UEFI-only)"
+  [[ -d /sys/firmware/efi || "$SKIP_EFI_CHECK" == 1 ]] || die "not booted in UEFI mode (this installer is UEFI-only; SKIP_EFI_CHECK=1 for disk images)"
 fi
 for t in sgdisk mkfs.fat mkfs.ext4 curl tar blkid partprobe sha512sum xz; do
   command -v "$t" >/dev/null || { [[ "$DRY_RUN" == 1 ]] && warn "missing tool: $t" || die "missing tool: $t"; }
@@ -126,7 +154,7 @@ do_fresh() {
   [[ "$DRY_RUN" == 1 || "${ASSUME_YES:-0}" == 1 ]] || sleep 5
 
   header "Partitioning ${DISK}"
-  run swapoff -a || true
+  run swapoff "$SWAP" 2>/dev/null || true     # only our own swap partition, never the live system's
   run umount -R "$MNT" 2>/dev/null || true
   run sgdisk --zap-all "$DISK"
   run sgdisk --new=1:0:+"$ESP_SIZE"  --typecode=1:ef00 --change-name=1:EFI  "$DISK"
@@ -136,7 +164,7 @@ do_fresh() {
 
   header "Filesystems"
   run mkfs.fat -F32 "$EFI"
-  run mkswap "$SWAP"; run swapon "$SWAP"
+  run mkswap "$SWAP"; run swapon "$SWAP" || warn "could not swapon $SWAP (fine for a disk image)"
   # shellcheck disable=SC2086  # EXT4_OPTS is intentionally word-split
   run mkfs.ext4 -F $EXT4_OPTS "$ROOT"
 
@@ -219,13 +247,38 @@ MOD_END
 # ── Local grimoire (spells that are not in the official one, e.g. broadcom-wl) ─
 install_local_grimoire() {
   [[ -d "$SELF_DIR/grimoire" ]] || return 0
-  header "Installing local grimoire (broadcom-wl)"
+  header "Installing local grimoire (dzen2 over https, broadcom-wl)"
   run mkdir -p "$MNT/var/lib/sorcery/codex/local" "$MNT/etc/sorcery/local"
   run cp -a "$SELF_DIR/grimoire/." "$MNT/var/lib/sorcery/codex/local/"
+  # spells source helper files (FUNCTIONS, MESON_DEPENDS, ...) from their own grimoire's root, so the local
+  # grimoire needs the official grimoire's top-level files: symlink them (they stay current across scribe updates)
+  if [[ "$DRY_RUN" == 1 ]]; then echo "[dry-run] symlink the official grimoire's top-level files into codex/local"
+  else
+    local off; off=$(find "$MNT/var/lib/sorcery/codex" -mindepth 1 -maxdepth 1 -type d ! -name local | head -1)
+    if [[ -n "$off" ]]; then
+      for f in "$off"/*; do [[ -f "$f" && "$f" != *.index ]] && ln -sfn "../$(basename "$off")/$(basename "$f")" "$MNT/var/lib/sorcery/codex/local/$(basename "$f")"; done
+    fi
+  fi
   if [[ "$DRY_RUN" == 1 ]]; then
     echo "[dry-run] append GRIMOIRE_DIR[1]=/var/lib/sorcery/codex/local to $MNT/etc/sorcery/local/grimoire"
   elif ! grep -qs 'codex/local' "$MNT/etc/sorcery/local/grimoire"; then
-    echo 'GRIMOIRE_DIR[1]=/var/lib/sorcery/codex/local' >> "$MNT/etc/sorcery/local/grimoire"
+    # local FIRST: its spells (dzen2 over https, broadcom-wl) override/extend the official grimoire
+    local GF="$MNT/etc/sorcery/local/grimoire"
+    { echo 'GRIMOIRE_DIR[0]=/var/lib/sorcery/codex/local'
+      sed -E 's/GRIMOIRE_DIR\[[0-9]+\]/GRIMOIRE_DIR[1]/' "$GF"; } > "$GF.new" && mv "$GF.new" "$GF"
+  fi
+}
+
+# ── Sorcery settings: parallel builds, unattended kernel answers, space saving ──
+write_sorcery_config() {
+  header "Configuring sorcery (JOBS=$JOBS${UNATTENDED:+, UNATTENDED=$UNATTENDED}${SAVE_SPACE:+, SAVE_SPACE=$SAVE_SPACE})"
+  write /etc/sorcery/local/compile_config <<CC_END
+MAKE_NJOBS="$JOBS"
+CC_END
+  if [[ "$UNATTENDED" == 1 && -n "$KRESTORE" ]]; then run install -D -m 0644 "$SELF_DIR/kernel/vm.config" "$MNT$KRESTORE"; fi
+  if [[ "$SAVE_SPACE" == 1 ]]; then
+    if [[ "$DRY_RUN" == 1 ]]; then echo '[dry-run] append ARCHIVE="off" CLEAN_SOURCE="on" to /etc/sorcery/local/config'
+    else printf '%s\n' 'ARCHIVE="off"' 'CLEAN_SOURCE="on"' >> "$MNT/etc/sorcery/local/config"; fi
   fi
 }
 
@@ -258,7 +311,8 @@ do_resume() {
 
 if [[ $MODE == fresh ]]; then do_fresh; else do_resume; fi
 write_profile_config
-[[ $PROFILE == macbookair ]] && install_local_grimoire
+write_sorcery_config
+install_local_grimoire
 $INSTALL_DESKTOP && install_rice
 
 if [[ "$SKIP_CHROOT" == 1 ]]; then
@@ -278,6 +332,10 @@ run cp -L /etc/resolv.conf "$MNT/etc/resolv.conf"
 SPELLS=("${SPELLS_CORE[@]}")
 if [[ $PROFILE == macbookair ]]; then SPELLS+=("${SPELLS_MAC[@]}"); else SPELLS+=("${SPELLS_VM[@]}"); fi
 $INSTALL_DESKTOP && SPELLS+=("${SPELLS_DESKTOP[@]}")
+if [[ -n "$SKIP_SPELLS" ]]; then
+  FILTERED=(); for s in "${SPELLS[@]}"; do [[ " $SKIP_SPELLS " == *" $s "* ]] || FILTERED+=("$s"); done
+  SPELLS=("${FILTERED[@]}")
+fi
 
 write /root/sm-chroot.sh <<CHROOT_END
 #!/bin/bash
@@ -289,24 +347,117 @@ FAILED=()
 if [[ -n "$CA_BUNDLE" ]]; then
   export SSL_CERT_FILE=/root/ca-bundle.pem CURL_CA_BUNDLE=/root/ca-bundle.pem
   echo "ca_certificate=/root/ca-bundle.pem" > /root/.wgetrc
+  printf '[http]\n\tsslCAInfo = /root/ca-bundle.pem\n' > /root/.gitconfig
 fi
 echo "── Syncing grimoire (scribe update)"
 scribe update || echo "warn: scribe update failed — using the grimoire snapshot from the tarball"
 command -v cast >/dev/null || { echo "error: sorcery (cast) not found in the chroot"; exit 2; }
+# make the local grimoire's spells (dzen2, broadcom-wl) known to sorcery
+if [[ -d /var/lib/sorcery/codex/local ]]; then scribe reindex local >/dev/null 2>&1; scribe reindex-version local >/dev/null 2>&1; fi
+
+if [[ "$UNATTENDED" == 1 ]]; then
+  # The base tarball saves answers for an old 3.4.51 kernel. Replace them with a fully non-interactive
+  # build of the NEWEST kernel series the (just refreshed) grimoire offers: \`make defconfig\` builds in
+  # virtio, EXT4, the EFI stub and DEVTMPFS_MOUNT; no bootloader update (GRUB is installed below).
+  KD=\$(find /var/lib/sorcery/codex -mindepth 4 -maxdepth 4 -path '*/kernels/linux/latest.defaults' | head -1)
+  KMAJ=\$(grep -oE '^LATEST_[0-9]+' "\$KD" 2>/dev/null | sort -t_ -k2 -n | tail -1)
+  if [[ -n "\$KMAJ" ]]; then
+    echo "── Kernel series for the unattended build: \$KMAJ"
+    mkdir -p /etc/sorcery/local/depends
+    cat > /etc/sorcery/local/depends/linux.p <<LP_END
+KERNEL_ARCH="x86_64"
+KMODE="newktree"
+KLINUX_RECONFIGURE="false"
+BASE_KVER="\$KMAJ"
+SELECTED_PATCHES="LATEST_maintenance_patches_\${KMAJ#LATEST_}"
+EXTRA_MAKE_OPTIONS="-j$JOBS"
+CONFIG_RESTORE="$KRESTORE"
+MAKEMODE="$KMAKEMODE"
+UPDATE_BL="n"
+LP_END
+  else
+    echo "warn: no LATEST_<n> kernel found in latest.defaults — the linux cast may prompt or fail"
+  fi
+fi
+
+# This installer is UEFI-only, but the grub2 spell's default answer is the BIOS build (i386-pc), whose
+# grub-install has no x86_64-efi modules. Pre-seed the platform answer sorcery would otherwise ask for.
+mkdir -p /etc/sorcery/local/depends
+cat > /etc/sorcery/local/depends/grub2.p <<GP_END
+GRUB2_OPTS="--disable-mm-debug --disable-efiemu"
+GRUB2_PLATFORM="x86_64-efi"
+GRUB2_RELEASE="stable"
+GP_END
+# curl's SSL provider defaults to "none" (--without-ssl): no https for curl or (through it) git. Use openssl.
+touch /etc/sorcery/local/depends/curl.p
+if grep -q '^CURL_SSL=' /etc/sorcery/local/depends/curl.p; then sed -i 's/^CURL_SSL=.*/CURL_SSL="openssl"/' /etc/sorcery/local/depends/curl.p
+else echo 'CURL_SSL="openssl"' >> /etc/sorcery/local/depends/curl.p; fi
+if [[ "$INSTALL_DESKTOP" == true ]]; then
+  cat > /etc/sorcery/local/depends/mesa.p <<MP_END
+MESA_BRANCH="stable"
+MESON_BUILD_TYPE="plain"
+MESA_PLATFORMS="x11"
+MESA_ARCH="x86"
+MESA_HW="$MESA_HW"
+MESA_GALLIUM_CHOICE="$MESA_GALLIUM"
+MESA_GALLIUM="$MESA_GALLIUM"
+MESA_GALLIUM_HUD="n"
+MESA_RUSTICL="n"
+MESA_EGL="y"
+MESA_EGL_DEFAULT="auto"
+MESA_VULKAN_CHOICE="none"
+MESA_VULKAN="none"
+MESA_VULKAN_LAYERS=""
+MESA_SHADER_CACHE="n"
+MESA_GLES1="n"
+MESA_GLES23="y"
+MESA_OPENGL="y"
+MESA_GBM="y"
+MESA_GLX_CHOICE="dri"
+MESA_GLX="dri"
+MESA_GLX_DIRECT="y"
+MESA_GLX_READONLY="n"
+MESA_GLVND="n"
+MESA_SPIRV_DXIL="n"
+MESA_TOOLS_CHOICE="none"
+MESA_TOOLS="none"
+MESA_TEFLON="n"
+MESA_GPUVIS="n"
+MESA_VIDEO_CODECS="none"
+MESA_XMLCONFIG="n"
+MESA_EXTERNAL_GBM="n"
+MP_END
+fi
 
 # codex layout is <grimoire>/<section>/<spell>, i.e. 3 levels below /var/lib/sorcery/codex
 have_spell() { find /var/lib/sorcery/codex -mindepth 3 -maxdepth 3 -type d -name "\$1" 2>/dev/null | grep -q .; }
 WANT=(${SPELLS[*]})
+# an already-installed spell that was built wrongly (BIOS-only grub2, EGL-less mesa) must be recompiled
+needs_recast() {
+  case "\$1" in
+    grub2) [[ -d /usr/lib/grub/i386-pc && ! -d /usr/lib/grub/x86_64-efi ]] ;;
+    mesa)  [[ ! -e /usr/include/EGL/egl.h ]] ;;
+    *)     return 1 ;;
+  esac
+}
+# sorcery records installs as spell:date:installed:version; a resume must not recompile them
+is_installed() { grep -q "^\$1:[^:]*:installed:" /var/state/sorcery/packages 2>/dev/null; }
 CAST=(); for s in "\${WANT[@]}"; do
-  if have_spell "\$s"; then CAST+=("\$s"); else echo "warn: spell '\$s' not in the grimoire — skipping"; fi
+  if ! have_spell "\$s"; then echo "warn: spell '\$s' not in the grimoire — skipping"
+  elif is_installed "\$s" && ! needs_recast "\$s"; then
+    echo "already installed: \$s — skipping"
+  else CAST+=("\$s"); fi
 done
 
 # Kernel first, bootloader second: a bootable system exists even if a later
 # desktop cast fails. The linux spell opens a kernel config menu — see the
 # README for the options this machine needs built IN (no initramfs).
 echo "── Casting: \${CAST[*]}"
-for s in linux grub2 efibootmgr; do
-  [[ " \${CAST[*]} " == *" \$s "* ]] && { cast "\$s" || { echo "warn: cast \$s failed (re-run ./install.sh resume)"; FAILED+=("cast \$s"); }; }
+for s in linux grub2 efibootmgr curl git mesa libxcursor xcb-util-cursor libxscrnsaver libxinerama libnotify; do
+  COPT=()
+  # an earlier BIOS build of grub2 (no EFI modules) must be recompiled, not skipped as "no work to do"
+  needs_recast "\$s" && is_installed "\$s" && COPT=(-c)
+  [[ " \${CAST[*]} " == *" \$s "* ]] && { cast "\${COPT[@]}" "\$s" || { echo "warn: cast \$s failed (re-run ./install.sh resume)"; FAILED+=("cast \$s"); }; }
 done
 
 echo "── Installing GRUB (UEFI, removable path — works on OVMF and Apple EFI)"
@@ -314,18 +465,24 @@ grub-install --target=x86_64-efi --efi-directory=/boot/efi --removable || { echo
 grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=SourceMage 2>/dev/null || true
 grub-mkconfig -o /boot/grub/grub.cfg || { echo "warn: grub-mkconfig failed"; FAILED+=("grub-mkconfig"); }
 
-REST=(); for s in "\${CAST[@]}"; do case "\$s" in linux|grub2|efibootmgr) ;; *) REST+=("\$s") ;; esac; done
+REST=(); for s in "\${CAST[@]}"; do case "\$s" in linux|grub2|efibootmgr|curl|git|mesa|libxcursor|xcb-util-cursor|libxscrnsaver|libxinerama|libnotify) ;; *) REST+=("\$s") ;; esac; done
 ((\${#REST[@]})) && { cast "\${REST[@]}" || { echo "warn: some casts failed — re-run: ./install.sh resume"; FAILED+=("cast \${REST[*]}"); }; }
 
-echo "── Set the root password"; passwd root || FAILED+=("passwd root")
+echo "── Set the root password"
+if [[ -n "$ROOT_PASSWORD" ]]; then echo "root:$ROOT_PASSWORD" | chpasswd || FAILED+=("passwd root"); else passwd root || FAILED+=("passwd root"); fi
 if [[ "$INSTALL_DESKTOP" == true ]] && command -v slock >/dev/null; then chmod u+s "\$(command -v slock)"; fi
+# No logind here, so a normal user cannot open the DRM/VT devices: make Xorg setuid (it drops privileges after opening them)
+if [[ "$INSTALL_DESKTOP" == true && -x /usr/bin/Xorg ]]; then chmod u+s /usr/bin/Xorg; fi
 if [[ -n "$USER_NAME" ]]; then
-  id "$USER_NAME" >/dev/null 2>&1 || useradd -m "$USER_NAME"
+  id "$USER_NAME" >/dev/null 2>&1 || useradd -m -G video,input,audio "$USER_NAME"
+  # X needs /dev/dri (video), /dev/input (input); make sure an existing user has them too
+  if [[ "$INSTALL_DESKTOP" == true ]]; then usermod -aG video,input,audio "$USER_NAME" 2>/dev/null || true; fi
   # users created before the rice was installed do not get /etc/skel: copy it in (never overwrite)
   if [[ "$INSTALL_DESKTOP" == true && ! -e "/home/$USER_NAME/.config/bspwm" ]]; then
     cp -rn /etc/skel/. "/home/$USER_NAME/" && chown -R "$USER_NAME:\$(id -gn "$USER_NAME")" "/home/$USER_NAME"
   fi
-  echo "── Set the password for $USER_NAME"; passwd "$USER_NAME" || FAILED+=("passwd $USER_NAME")
+  echo "── Set the password for $USER_NAME"
+  if [[ -n "$USER_PASSWORD" ]]; then echo "$USER_NAME:$USER_PASSWORD" | chpasswd || FAILED+=("passwd $USER_NAME"); else passwd "$USER_NAME" || FAILED+=("passwd $USER_NAME"); fi
 fi
 if ((\${#FAILED[@]})); then echo "FAILED STEPS: \${FAILED[*]}"; exit 1; fi
 CHROOT_END
@@ -333,9 +490,10 @@ run chmod +x "$MNT/root/sm-chroot.sh"
 
 header "Entering chroot to configure & build (this compiles from source)"
 CHROOT_RC=0
+CHROOT_IN=/dev/stdin; [[ "$UNATTENDED" == 1 ]] && CHROOT_IN=/dev/null   # EOF on stdin = every prompt takes its default
 run env -i HOME=/root TERM="${TERM:-linux}" PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
-    chroot "$MNT" /bin/bash /root/sm-chroot.sh || CHROOT_RC=$?
-run rm -f "${MNT:?}/root/sm-chroot.sh" "${MNT:?}/root/ca-bundle.pem" "${MNT:?}/root/.wgetrc"
+    chroot "$MNT" /bin/bash /root/sm-chroot.sh < "$CHROOT_IN" || CHROOT_RC=$?
+run rm -f "${MNT:?}/root/sm-chroot.sh" "${MNT:?}/root/ca-bundle.pem" "${MNT:?}/root/.wgetrc" "${MNT:?}/root/.gitconfig"
 
 header "Cleaning up"
 run umount -R "$MNT" || warn "could not unmount everything cleanly"

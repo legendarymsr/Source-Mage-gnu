@@ -1,0 +1,31 @@
+2024-07-15 Ismael Luceno <ismael@sourcemage.org>
+	* DEPENDS, DETAILS, PREPARE, PRE_SUB_DEPENDS, SUB_DEPENDS:
+	  removed scm branch
+	* DETAILS: fixed SOURCE_URL
+	* BUILD, DEPENDS, INSTALL: disabled installation of .la files
+	* DETAILS: updated description
+
+2023-09-07 Pavel Vinogradov <public@sorcemage.org>
+	* DETAILS: version 0.3.3, downloads from launchpad now, updated scm source url
+	* DEPENDS: git -> bzr
+
+2022-12-10 Conner Clere <connerclere@gmail.com>
+	* DETAILS: version 0.3
+
+2022-06-04  Florian Franzmann  <bwlf@bandrate.org
+	* DETAILS: version 0.1.4, update WEB_SITE, update SOURCE_URL
+
+2015-12-27 Pavel Vinogradov <public@sourcemage.org>
+	* DETAILS, *DEPENDS, PREPARE: added scm branch
+
+2015-05-25 Thomas Orgis <sobukus@sourcemage.org>
+	* DETAILS: remove SOURCEFORGE_URL usage (automated)
+
+2011-10-14 Bor Kraljič <pyrobor@ver.si>
+	* DETAILS: fixed long description wrap (scripted)
+
+2009-12-18 Arjan Bouter <abouter@sourcemage.org>
+	* BUILD, DEPENDS, DETAILS, PRE_BUILD: spell created
+
+2026-11-06 legendarymsr
+	* BUILD: add -L.libs so the bundled tools link under slibtool (local override)

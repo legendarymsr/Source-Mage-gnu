@@ -1,0 +1,30 @@
+. "$GRIMOIRE"/FUNCTIONS
+           SPELL=dzen2
+         VERSION=$(get_scm_version)
+          SOURCE=$SPELL-git.tar.bz2
+  FORCE_DOWNLOAD=on
+# The grimoire's dzen2 clones git://github.com/..., a protocol GitHub switched off in 2022, so it
+# cannot be downloaded any more. Same source, over https (this local spell overrides it).
+   SOURCE_URL[0]=git_http://github.com/robm/dzen.git:dzen2-git:master
+   SOURCE_IGNORE=volatile
+SOURCE_DIRECTORY="$BUILD_DIRECTORY/$SPELL-git"
+        WEB_SITE="https://github.com/robm/dzen"
+      LICENSE[0]=MIT
+         ENTERED=20070309
+           SHORT="A scriptable messaging, notification, and launching tool."
+cat << EOF
+dzen is a scriptable notification, messaging, and launching application.
+It provides user control through a flexible event/action mechanism.
+
+It was designed to be fast, tiny and scriptable in any language.
+
+Features
+--------
+* Small, fast, very tiny set of dependencies.
+* Scriptable in any language.
+* Sophisticated formating language - including colours, icons, graphics.
+* Versatile - display all sorts of information.
+* Interactive - user defined mouse and keyboard actions.
+* Optional XFT support.
+* Optional XINERAMA support.
+EOF

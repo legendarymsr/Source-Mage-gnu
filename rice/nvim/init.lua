@@ -29,7 +29,11 @@ vim.opt.splitbelow = true
 vim.opt.title = true
 
 -- 3. plugins (no icons: the grimoire's JetBrains Mono is not a Nerd Font)
-require("lazy").setup({
+local ok_lazy, lazy = pcall(require, "lazy")
+if not ok_lazy then
+  vim.notify("lazy.nvim is not installed (needs git + network on first run): starting without plugins", vim.log.levels.WARN)
+else
+lazy.setup({
   -- theme
   {
     "folke/tokyonight.nvim",
@@ -84,6 +88,7 @@ require("lazy").setup({
   { "lewis6991/gitsigns.nvim", event = "VeryLazy", opts = {} },
   { "lukas-reineke/indent-blankline.nvim", main = "ibl", event = "VeryLazy", opts = { indent = { char = "│" } } },
 }, { install = { colorscheme = { "tokyonight-night" } }, checker = { enabled = false } })
+end
 
 -- 4. keymaps
 local map = vim.keymap.set

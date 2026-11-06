@@ -39,35 +39,66 @@ Re-running `./install.sh` on a disk that already has Sorcery resumes (no
 wipe); a failed cast is fixed by running it again. `DRY_RUN=1` prints every
 destructive command instead of running it.
 
-## Test status (QEMU, no KVM, software emulation)
+## Unattended install
 
-Run end to end in QEMU/OVMF from the Gentoo minimal ISO, following the steps above:
+```sh
+UNATTENDED=1 ROOT_PASSWORD=... USER_NAME=legend INSTALL_DESKTOP=yes SKIP_SPELLS=surf \
+  DISK=/dev/vda ./install.sh
+```
+
+`UNATTENDED=1` closes stdin for the build, so every `cast` question takes its default, and builds
+the newest kernel series the grimoire offers (detected after `scribe update`) from `kernel/vm.config`
+(the `vm` profile; other profiles get plain `make defconfig`, so prefer the interactive kernel menu on
+real hardware). Other knobs: `JOBS`, `SAVE_SPACE=1`, `SKIP_SPELLS`, `SKIP_EFI_CHECK=1` (install into a
+disk image from a non-UEFI host), `USER_PASSWORD`, `CA_BUNDLE`, `SKIP_CHROOT=1`. A re-run skips spells
+that are already installed.
+
+**Why so many local spells.** Unattended "default" answers and the current grimoire do not produce a
+working desktop on their own. `grimoire/` is a local grimoire (registered first, so it wins) that
+carries the fixes found by actually building it:
+
+| spell | problem in the official one | local fix |
+|---|---|---|
+| `dzen2` | downloads from `git://github.com`, a protocol GitHub switched off in 2022; Xft off | `git_http://` source, Xft always on |
+| `picom` | `depends xcb`, which is an unrelated cut-buffer tool that needs (broken) `imake` | dependency removed |
+| `rofi` | `yyparse` prototype error under GCC 15's C23 default | built as `-std=gnu17` |
+| `dunst` | `dunstify` does not compile against libnotify 0.8 | build/install only daemon + `dunstctl` |
+| `libnotify` | man pages default on, need `docbook-xsl-ns` (not in the grimoire) | man/docbook forced off |
+| `libvterm` | demo tools fail to link under `slibtool` | `-L.libs` |
+| `broadcom-wl` | does not exist (MacBook WiFi) | new spell, see below |
+
+The installer also pre-seeds answers whose defaults are wrong: `grub2` (default is the BIOS build, so no
+EFI modules), `mesa` (default is Wayland/ARM/Freedreno with no GLX and no EGL), `curl` (default has no
+TLS, so `git` could not clone over https), and builds `curl` before `git`. `xorg-server` is now called
+`xserver`; `xf86-input-evdev` is used instead of `libinput` (which wants Lua 5.4). Xorg is made setuid
+(there is no logind) and the user joins `video`, `input` and `audio`.
+
+## Test status
+
+Run in this repo's author environment (4-core Linux VM, no KVM): the installer built a real system
+into a disk image (natively in a chroot, then finished and booted under QEMU + OVMF):
 
 | Step | Result |
 |---|---|
-| `tar xf /dev/vdb` unpack of the installer, documented `install.sh` command | works |
-| GPT partitioning, `mkfs.fat` / `mkswap` / `mkfs.ext4`, UUID `fstab` | works |
-| Download + sha512 verification + unpack of the base tarball, `fresh` over an old install | works |
-| `resume` mode, `scribe update`, spell lookup, interactive `cast` prompts | works; `cast linux` started building `elfutils` |
-| Failure reporting (`FAILED STEPS: …`, non-zero exit) | works |
-| UEFI boot: OVMF → `EFI/BOOT/BOOTX64.EFI` (GRUB 2.14) → kernel → ext4 root → `simpleinit` → runlevel 3 → **login prompt on the VGA console and on serial; root login works** | works with the tarball's stock 3.4.51 kernel (disk attached as SATA) |
-| `cast linux`, `cast grub2` (so `grub-install`/`grub-mkconfig` as the installer runs them), the desktop, a kernel built by the `linux` spell, real hardware | **not tested**: a source build is far too slow without KVM. The boot above used the live ISO's GRUB with a hand-written `grub.cfg` that mirrors `/etc/default/grub` |
+| partition, `mkfs`, UUID `fstab`, base tarball download + sha512 + unpack, `fresh`/`resume` | works |
+| `scribe update`, kernel **7.3.1** built from source by the `linux` spell, **GRUB 2.12** built by the `grub2` spell for x86_64-efi, dhcpcd, openssh, sudo, curl, git | works |
+| `grub-install --removable` + `grub-mkconfig` in the chroot on a real FAT ESP | works |
+| cold boot under UEFI: OVMF → GRUB → kernel 7.3.1 → ext4 root on a **virtio** disk → `simpleinit` → runlevel 3 → login on VGA and serial | works |
+| desktop: Xorg, mesa (softpipe+virgl), bspwm, sxhkd, picom, rofi, dunst, st, slock, dzen2, neovim built from source; `startx` as a normal user shows the bspwm desktop with the Tokyo Night bar, `super+Return` opens `st`, neovim 0.11 starts | works (screenshots taken) |
+| `surf` (needs `webkitgtk` 2.4.11) | **left out**: hours of compiling, unlikely to build with GCC 15 |
+| a from-scratch run of the *final* `install.sh` start to finish | **not done**: the install was assembled over several resumed runs while fixing the issues above, and the last fixes (kernel config via `CONFIG_RESTORE`, extra X libraries, `xauth`) were applied by hand and then folded into the script. Expect to hit one more rough edge |
+| `broadcom-wl` cast, MacBook hardware, rofi/neovim plugins over the network | not tested |
 
-Things this uncovered, now handled or worth knowing:
+Boot details worth knowing (all handled by `install.sh`):
 
-- The base tarball's stock kernel has `VIRTIO_BLK=m` and there is no initramfs, so it
-  cannot boot from `run-vm.sh`'s virtio disk. Build your own kernel with the drivers in.
-- Modern `mkfs.ext4` defaults (`metadata_csum_seed`, …) are rejected by that old kernel,
-  so root is formatted with conservative features (`EXT4_OPTS`, see `install.sh`).
-- Init stalled after udev coldplug (`Error opening …/dev/initctl`) until the kernel was given
-  `devtmpfs.mount=1`: `simpleinit` keeps its FIFO in `/dev`. The installer now writes that into
-  `/etc/default/grub`, plus `GRUB_GFXPAYLOAD_LINUX=keep` (otherwise the screen stays blank),
-  `GRUB_DISABLE_LINUX_UUID=true` (no initramfs, so `root=UUID=` cannot resolve), and, for the
-  `vm` profile, a serial getty in `/etc/inittab`.
-- `cast` is interactive (e.g. `elfutils` vs `libelf`, initramfs, optional dependencies, the
-  kernel menu): press Enter for the defaults. Unattended installs are not supported.
-- `SKIP_CHROOT=1` stops after unpacking the base system; `CA_BUNDLE=` trusts an extra CA
-  inside the chroot (TLS-inspecting proxies).
+- Root is formatted with conservative ext4 features (`EXT4_OPTS`) so the base tarball's old 3.4.51 kernel can
+  still mount it; that kernel has `VIRTIO_BLK=m` and no initramfs, so it cannot boot a virtio disk, which is
+  why the installer builds its own kernel.
+- `/etc/default/grub` gets `devtmpfs.mount=1` (without it `simpleinit` stalls: its `/dev/initctl` lives in
+  `/dev`), `GRUB_GFXPAYLOAD_LINUX=keep` and `GRUB_DISABLE_LINUX_UUID=true` (no initramfs, so `root=UUID=` cannot
+  resolve). The `vm` profile also adds a serial getty to `/etc/inittab`.
+- Plain `make defconfig` has **no framebuffer console**, so a GUI window stays black; `kernel/vm.config` adds
+  `DRM_SIMPLEDRM`, `DRM_BOCHS`, `DRM_FBDEV_EMULATION` and `FRAMEBUFFER_CONSOLE`.
 
 ## What it uses
 

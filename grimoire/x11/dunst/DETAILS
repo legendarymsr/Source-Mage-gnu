@@ -1,0 +1,18 @@
+           SPELL=dunst
+         VERSION=1.11.0
+          SOURCE=${SPELL}-${VERSION}.tar.gz
+   SOURCE_URL[0]=https://github.com/dunst-project/${SPELL}/archive/v${VERSION}.tar.gz
+     SOURCE_HASH=sha512:84c9edccddd183fb867233cb5377115d96735f4c1be84007194ac39dd48d913e5bb021d2952057aecdb978564c2471a8974c4ee4eeccfb188e5345527007a5c4
+SOURCE_DIRECTORY="${BUILD_DIRECTORY}/${SPELL}-${VERSION}"
+            DOCS="AUTHORS RELEASE_NOTES ${DOCS}"
+        DOC_DIRS=""
+        WEB_SITE=https://dunst-project.org/
+      LICENSE[0]=BSD
+         ENTERED=20170720
+           SHORT="lightweight and customizable notification daemon"
+cat << EOF
+Dunst is a lightweight replacement for the notification-daemons provided by most
+desktop environments. It's very customizable, doesn’t depend on any toolkits and
+therefore fits in those windowmanager centric setups we all love to customize to
+perfection.
+EOF

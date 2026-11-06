@@ -1,0 +1,33 @@
+depends perl &&
+depends libxdg-basedir &&
+depends dbus &&
+depends glib2 &&
+depends gdk-pixbuf2 &&
+depends pango &&
+
+optional_depends systemd \
+                 "SYSTEMD=1" \
+                 "SYSTEMD=0" \
+                 "for systemd service file support" &&
+
+optional_depends libnotify "" "" "to build dunstify (client)" &&
+
+optional_depends wayland \
+                 'WAYLAND=1' \
+                 'WAYLAND=0' \
+                 'wayland support' &&
+
+if is_depends_enabled wayland;then
+  depends wayland-protocols
+fi &&
+
+optional_depends libx11 \
+                 'X11=1' \
+                 'X11=0' \
+                 'X11 support' &&
+
+if is_depends_enabled wayland;then
+  depends libxscrnsaver &&
+  depends libxrandr &&
+  depends libxinerama
+fi

@@ -69,7 +69,7 @@ mkdir -p "$VM_DIR"
 # ── Pack the installer into a tar that is attached as a read-only disk ────────
 pack_installer() {
   header "Packing installer -> $INSTALLER_TAR"
-  tar -cf "$INSTALLER_TAR" -C "$SELF_DIR" install.sh README.md grimoire rice
+  tar -cf "$INSTALLER_TAR" -C "$SELF_DIR" install.sh README.md grimoire rice kernel
 }
 
 ARG="${1:-}"; ISO=""

@@ -1,0 +1,3 @@
+2026-11-06 legendarymsr
+	* DETAILS: local override of the grimoire spell: clone over https (git:// is no longer served by GitHub)
+	* PRE_BUILD/DEPENDS: always build with Xft (needed for TrueType fonts; no core fonts on this system)

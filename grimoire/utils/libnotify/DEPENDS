@@ -1,0 +1,22 @@
+. "$GRIMOIRE"/MESON_DEPENDS &&
+
+depends dbus-glib  &&
+depends gdk-pixbuf2 &&
+# man pages / DocBook docs need docbook-xsl-ns (not in the grimoire): force them off. Meson options travel
+# through DEPENDS as bare name=value strings; man defaults to true upstream, so it must be set explicitly.
+depends glib2 "man=false docbook_docs=disabled" &&
+
+optional_depends gtk-doc \
+                 "gtk_doc=true" \
+                 "gtk_doc=false" \
+                 "build the API reference" &&
+
+optional_depends gobject-introspection \
+                 "introspection=enabled" \
+                 "introspection=disabled" \
+                 "for introspection" &&
+
+optional_depends gtk+4 \
+                 "tests=true" \
+                 "tests=false" \
+                 "for tests"

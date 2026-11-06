@@ -1,0 +1,5 @@
+2023-07-12 Conner Clere <xenanthropy@sourcemage.org>
+	* CONFLICTS, BUILD, CONFIGURE, DEPENDS, DETAILS: version 10.2, new spell
+
+2026-11-06 legendarymsr
+	* DEPENDS: drop "depends xcb" (that is the unrelated X cut-buffer tool, which needs imake and fails to build); libxcb and the xcb-util spells are already listed

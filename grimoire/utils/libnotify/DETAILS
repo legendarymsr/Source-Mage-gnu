@@ -1,0 +1,18 @@
+. "$GRIMOIRE"/MESON_FUNCTIONS
+           SPELL=libnotify
+         VERSION=0.8.7
+     SOURCE_HASH=sha512:75f8e605cd5331c91f502da61eec5bf5dfed6f1cf8c966e5c4356be48e24c32fe4be481dc16d0ccd4e25b2e9e207898124b349a0dc4575211e0044c9d81fc7ce
+          SOURCE=${SPELL}-${VERSION}.tar.xz
+   SOURCE_URL[0]="${GNOME_URL}/sources/${SPELL}/${VERSION%.*}/${SOURCE}"
+SOURCE_DIRECTORY="${BUILD_DIRECTORY}/${SPELL}-${VERSION}"
+        WEB_SITE=http://www.galago-project.org/
+         ENTERED=20051221
+      LICENSE[0]=GPL
+        KEYWORDS="utils"
+           SHORT="Allow applications to display passive pop-up notifications."
+cat << EOF
+The desktop notifications framework consists of a specification and reference
+implementation (libnotify and notification-daemon). They are designed to allow
+applications to display passive pop-up notifications that won't interrupt
+what the user is doing.
+EOF

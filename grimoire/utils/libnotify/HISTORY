@@ -1,0 +1,109 @@
+2025-11-01 Pavel Vinogradov <public@sourcemage.org>
+	* DETAILS: version 0.8.7
+	* DEPENDS: removed gtk+3, libpng and pygments, xsltproc -> libxslt,
+	  optionally depends on gtk+4
+
+2025-04-02 Ismael Luceno <ismael@sourcemage.org>
+	* DETAILS: updated spell to 0.8.6
+
+2025-03-10 Pavel Vinogradov <public@sourcemage.org>
+	* DETAILS: version 0.8.4, quoting++, simplified SOURCE_URL, added Watch line
+
+2022-05-28  Florian Franzmann  <bwlf@bandrate.org>
+	* DEPENDS: use MESON_DEPENDS
+
+2022-05-21 Eric Sandall <sandalle@sourcemage.org>
+	* DEPENDS: Depends on ninja-build-system (or have samurai installed)
+	  See MESON_FUNCTIONS
+
+2022-05-06 Florian Franzmann <bwlf@bandrate.org>
+	* DETAILS: version 0.7.12
+
+2020-07-11 Florian Franzmann <bwlf@bandrate.org>
+	* DEPENDS: add dependency on gtk+3
+
+2020-06-28 Florian Franzmann <bwlf@bandrate.org>
+	* DETAILS, DEPENDS: version 0.7.9
+
+2019-09-04 Florian Franzmann <bwlf@bandrate.org>
+	* DEPENDS: add dependency on pygments
+
+2019-08-25 Ismael Luceno <ismael@sourcemage.org>
+	* DETAILS: updated spell to 0.7.8
+	* DEPENDS, DETAILS, CONFIGURE: switched to meson build system
+	* BUILD: removed
+
+2017-08-23 Vlad Glagolev <stealth@sourcemage.org>
+	* DETAILS: PATCHLEVEL++
+	* DEPENDS: removed gtk+3
+	* BUILD: added, to use OPTS and disable tests
+
+2016-11-05 Florian Franzmann <bwlf@bandrate.org>
+	* DETAILS: version 0.7.7
+
+2012-12-30 Florian Franzmann <bwlf@bandrate.org>
+	* DEPENDS: added optional dependency on gobject-introspection,
+	  removed dependencies on libffi and pcre
+
+2012-12-28 Florian Franzmann <bwlf@bandrate.org>
+	* DEPENDS: added dependencies on gdk-pixbuf2, glib2, libffi,
+	  libpng, pcre
+	* DETAILS: bumped PATCHLEVEL
+
+2012-04-01 Ladislav Hagara <hgr@vabo.cz>
+	* DETAILS: 0.7.5
+
+2011-10-17 Bor Kraljič <pyrobor@ver.si>
+	* DEPENDS: changed gtk+2 -> gtk+3
+
+2011-08-29 Ladislav Hagara <hgr@vabo.cz>
+	* DETAILS: 0.7.4
+
+2011-05-22 Ladislav Hagara <hgr@vabo.cz>
+	* DETAILS: 0.7.3
+
+2011-04-10 Ladislav Hagara <hgr@vabo.cz>
+	* DETAILS: 0.7.2, gz -> bz2, BRANCH added, SOURCE_URL[0] updated
+
+2009-01-21 Eric Sandall <sandalle@sourcemage.org>
+	* DEPENDS: Doesn't depend on NOTIFICATION_DAEMON (Bug #14976)
+
+2008-11-21 Ladislav Hagara <hgr@vabo.cz>
+	* DETAILS: 0.4.5
+
+2007-03-05 George Sherwood <george@beernabeer.com>
+	* DETAILS: Updated to version 0.4.4
+	* DEPENDS: Changed to depends NOTIFICATION_DAEMON
+
+2006-11-15 Ladislav Hagara <hgr@vabo.cz>
+	* DETAILS: 0.4.3
+
+2006-07-27 Flavien Bridault <vlaaad@sourcemage.org>
+	* DEPENDS: now depends on dbus-glib instead of dbus
+	* DETAILS: PATCHLEVEL++
+
+2006-07-21 Flavien Bridault <vlaaad@sourcemage.org>
+	* DETAILS: Updated to 0.4.2
+
+2006-06-28 Eric Sandall <sandalle@sourcemage.org>
+	* DETAILS: Removed BUILD_API=2, set grimoire-wide
+
+2006-03-12 Karsten Behrmann <BearPerson@sourcemage.org>
+	* DETAILS: (automated) Add KEYWORDS
+
+2006-02-22 Flavien Bridault <disk@sourcemage.org>
+	* DETAILS: updated to 0.3.2
+
+2006-01-10 Flavien Bridault <disk@sourcemage.org>
+	* DEPENDS: added back gtk+2 and dbus, libnotify uses them directly,
+	  not through notification-daemon
+
+2005-12-29 Flavien Bridault <disk@sourcemage.org>
+	* DEPENDS: depends on notification-daemon, removed gtk+2 and dbus
+	  since notification-daemon already depends on them.
+
+2005-12-21 Flavien Bridault <disk@sourcemage.org>
+	* DETAILS, DEPENDS, HISTORY: created spell
+
+2026-11-06 legendarymsr
+	* DEPENDS/BUILD: build without man pages and DocBook docs (needs docbook-xsl-ns, not in the grimoire)
