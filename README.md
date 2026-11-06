@@ -61,10 +61,16 @@ drivers needed to reach the root filesystem must be built **in** (`=y`, not `=m`
 
 ## MacBook Air notes (i5-4250U, HD 5000, CS4208, Apple EFI)
 
-- **Broadcom BCM4360 WiFi has no spell in the grimoire.** There is no
-  `broadcom-wl`/`broadcom-sta`, and `b43`/`bcm43xx-fwcutter` do not support the
-  BCM4360. Use a USB Ethernet adapter or a phone USB tether during the install;
-  getting WiFi afterwards means writing a local spell for the proprietary `wl` driver.
+- **Broadcom BCM4360 WiFi: `broadcom-wl` is a local spell** in `grimoire/kernels/broadcom-wl/`
+  (the official grimoire has none, and `b43` does not support the BCM4360). The
+  installer copies it to `/var/lib/sorcery/codex/local` and registers it in
+  `/etc/sorcery/local/grimoire`. It builds Broadcom's proprietary `wl` driver
+  using Debian's 6.30.223.271-32 patch series (kernels 3.x–7.2), installs
+  `wl.ko`, blacklists the conflicting `b43`/`ssb`/`bcma`/`brcmsmac` modules, and
+  recasts itself whenever `linux` is cast. You still need **wired/tethered
+  internet during the install** (WiFi only works after the first boot) and
+  `CONFIG_CFG80211` in the kernel. Debian's series stops at kernel 7.2; on a
+  newer kernel the build may fail until the series is updated.
 - Microcode is the `microcode_ctl` spell (not `intel-microcode`); there is no
   `mbpfan` spell, so fan control is left to the firmware.
 - Audio gets `snd-hda-intel model=mba6`; if silent, try `model=auto` in

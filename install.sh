@@ -52,6 +52,7 @@ SWAP_SIZE="${SWAP_SIZE:-4G}"; ESP_SIZE="${ESP_SIZE:-512M}"
 VERIFY="${VERIFY:-true}"
 TARBALL_URL="${TARBALL_URL:-https://download.sourcemage.org/image/official/test/smgl-test-0.63-20251212_1200-basesystem-x86_64.tar.xz}"
 MNT=/mnt/sourcemage
+SELF_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 TB="${TARBALL_URL##*/}"
 
 # Spell names below were checked against the grimoire inside the base tarball
@@ -59,7 +60,7 @@ TB="${TARBALL_URL##*/}"
 # warning) any that no longer exist.
 SPELLS_CORE=(linux grub2 efibootmgr dhcpcd openssh sudo)
 SPELLS_VM=()
-SPELLS_MAC=(linux-firmware microcode_ctl alsa-utils wpa_supplicant)
+SPELLS_MAC=(linux-firmware microcode_ctl alsa-utils broadcom-wl wpa_supplicant)   # broadcom-wl: local grimoire, see grimoire/
 SPELLS_DESKTOP=(xorg-server xinit xf86-input-libinput mesa dejavu-ttf
                 xfce4-session xfwm4 xfce4-panel xfce4-settings xfdesktop thunar
                 xfce4-terminal xfce4-appfinder firefox)
@@ -190,6 +191,19 @@ MOD_END
   fi
 }
 
+# ── Local grimoire (spells that are not in the official one, e.g. broadcom-wl) ─
+install_local_grimoire() {
+  [[ -d "$SELF_DIR/grimoire" ]] || return 0
+  header "Installing local grimoire (broadcom-wl)"
+  run mkdir -p "$MNT/var/lib/sorcery/codex/local" "$MNT/etc/sorcery/local"
+  run cp -a "$SELF_DIR/grimoire/." "$MNT/var/lib/sorcery/codex/local/"
+  if [[ "$DRY_RUN" == 1 ]]; then
+    echo "[dry-run] append GRIMOIRE_DIR[1]=/var/lib/sorcery/codex/local to $MNT/etc/sorcery/local/grimoire"
+  elif ! grep -qs 'codex/local' "$MNT/etc/sorcery/local/grimoire"; then
+    echo 'GRIMOIRE_DIR[1]=/var/lib/sorcery/codex/local' >> "$MNT/etc/sorcery/local/grimoire"
+  fi
+}
+
 # ── Resume path: remount what a fresh install would have mounted ──────────────
 do_resume() {
   header "Resuming existing install"
@@ -200,6 +214,7 @@ do_resume() {
 
 if [[ $MODE == fresh ]]; then do_fresh; else do_resume; fi
 write_profile_config
+[[ $PROFILE == macbookair ]] && install_local_grimoire
 
 # ── The in-chroot phase, written out as a real script (no quoting soup) ───────
 header "Preparing chroot"

@@ -1,0 +1,27 @@
+default_pre_build &&
+
+# Debian's patch series lives in the second tarball.
+DEBIAN_DIR="$BUILD_DIRECTORY/broadcom-sta-debian" &&
+rm -rf "$DEBIAN_DIR" &&
+mkdir -p "$DEBIAN_DIR" &&
+cd "$DEBIAN_DIR" &&
+unpack_file 2 &&
+
+cd "$SOURCE_DIRECTORY" &&
+while read -r p; do
+  case "$p" in ''|'#'*) continue ;; esac
+  message "${MESSAGE_COLOR}Applying ${SPELL_COLOR}$p${DEFAULT_COLOR}"
+  patch -p1 --no-backup-if-mismatch < "$DEBIAN_DIR/debian/patches/$p" || return 1
+done < "$DEBIAN_DIR/debian/patches/series" &&
+
+# Debian renames the shipped blob per architecture (patch 01 selects it)
+case "$(uname -m)" in
+  x86_64) WL_ARCH=amd64 ;;
+  i?86)   WL_ARCH=i386  ;;
+  *) message "${PROBLEM_COLOR}broadcom-wl supports only x86/x86_64${DEFAULT_COLOR}"; return 1 ;;
+esac &&
+echo "$WL_ARCH" > "$SOURCE_DIRECTORY/.wl_arch" &&
+cp -p "$SOURCE_DIRECTORY/$WL_ARCH/lib/wlc_hybrid.o_shipped" \
+      "$SOURCE_DIRECTORY/$WL_ARCH/lib/wlc_hybrid.o_$WL_ARCH" &&
+
+cp "$DEBIAN_DIR/debian/broadcom-sta-common.modprobe" "$SOURCE_DIRECTORY/broadcom-wl.conf"

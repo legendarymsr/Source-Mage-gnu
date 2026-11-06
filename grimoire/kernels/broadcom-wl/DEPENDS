@@ -1,0 +1,4 @@
+depends gcc   &&
+depends make  &&
+depends patch &&
+depends linux

@@ -1,0 +1,5 @@
+KVER="$(get_kernel_version)" &&
+install -D -m 0644 "$SOURCE_DIRECTORY/$(cat "$SOURCE_DIRECTORY/.wl_arch")/wl.ko" \
+  "${INSTALL_ROOT}/lib/modules/$KVER/kernel/drivers/net/wireless/wl.ko" &&
+install -D -m 0644 "$SOURCE_DIRECTORY/broadcom-wl.conf" \
+  "${INSTALL_ROOT}/etc/modprobe.d/broadcom-wl.conf"

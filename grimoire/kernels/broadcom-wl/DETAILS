@@ -1,0 +1,33 @@
+           SPELL=broadcom-wl
+         VERSION=6.30.223.271
+        DEBIAN_REV=32
+          SOURCE="broadcom-sta_${VERSION}.orig.tar.xz"
+         SOURCE2="broadcom-sta_${VERSION}-${DEBIAN_REV}.debian.tar.xz"
+   SOURCE_URL[0]="https://deb.debian.org/debian/pool/non-free/b/broadcom-sta/${SOURCE}"
+  SOURCE2_URL[0]="https://deb.debian.org/debian/pool/non-free/b/broadcom-sta/${SOURCE2}"
+     SOURCE_HASH=sha512:946c709564fa0b97e38736bd6f8d236f251b586f787559f65dd1f8f9c9fc2b123823ab623c1979cffb7a184698ffd5dd49fd4b37e95c33cac3d78e07f78c03b8
+    SOURCE2_HASH=sha512:4476ffedbd44e28f19528fe8858c8de7c96c8b93ce1a76abed9a560d0ca9e36e07b821939908246373cbe78f2b7ab8cdca651660a7578e6f823a13f9c5590b96
+SOURCE_DIRECTORY="${BUILD_DIRECTORY}/broadcom-sta-${VERSION}"
+        WEB_SITE="https://www.broadcom.com/support/download-search?pg=Legacy+Products&pf=Legacy+Wireless&pn=&pa=&po=&dk=&pl="
+        KEYWORDS="kernel wireless driver broadcom"
+      LICENSE[0]="Broadcom proprietary (hybrid: source glue + binary blob)"
+         ENTERED=20261106
+           SHORT="Broadcom BCM43xx 802.11 wireless driver (proprietary wl, hybrid)"
+cat << EOF
+Broadcom's proprietary "hybrid" Linux driver (wl.ko) for BCM4311, BCM4312,
+BCM4321, BCM4322, BCM43142, BCM43224, BCM43225, BCM43227, BCM43228, BCM4331,
+BCM4360 and BCM43602 PCI/PCIe wireless chips, e.g. the BCM4360 in 2013-2014
+MacBook Airs, which the free b43 and brcmsmac drivers do not support.
+
+The kernel-facing glue is shipped as source and compiled against your
+running kernel; the rest of the driver is a binary blob (wlc_hybrid.o).
+Broadcom's own download is gone and the driver does not build on modern
+kernels as released, so this spell uses Debian's 6.30.223.271 packaging,
+whose patch series (linux 3.x through 7.x) is applied before building.
+
+The in-kernel b43, b43legacy, bcma, ssb and brcmsmac drivers conflict with
+wl; the spell installs /etc/modprobe.d/broadcom-wl.conf to blacklist them.
+Your kernel needs CONFIG_CFG80211 (as a module or built in) and PCI.
+
+Rebuilt automatically whenever the linux spell is cast.
+EOF
