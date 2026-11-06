@@ -184,11 +184,25 @@ FSTAB_END
 
 # ── Profile-specific config ───────────────────────────────────────────────────
 write_profile_config() {
+  # No initramfs, so the kernel cannot resolve root=UUID=...: make grub-mkconfig use the device name.
+  # devtmpfs.mount=1: Source Mage's simpleinit keeps /dev/initctl in /dev, so the kernel must
+  # auto-mount devtmpfs (init otherwise stalls after udev coldplug). GFXPAYLOAD=keep keeps the
+  # UEFI framebuffer so the screen is not blank.
   write /etc/default/grub <<GRUB_END
 GRUB_DISTRIBUTOR="SourceMage"
 GRUB_TIMEOUT=3
-GRUB_CMDLINE_LINUX_DEFAULT=""
+GRUB_DISABLE_LINUX_UUID=true
+GRUB_CMDLINE_LINUX_DEFAULT="devtmpfs.mount=1"
+GRUB_GFXPAYLOAD_LINUX=keep
 GRUB_END
+  if [[ $PROFILE == vm ]]; then
+    # /etc/inittab only has gettys on tty1-6; add a serial one (harmless on a GUI display)
+    if [[ "$DRY_RUN" == 1 ]]; then
+      echo "[dry-run] add 'ttyS0:linux:/sbin/agetty -L ttyS0 115200 vt100' to $MNT/etc/inittab"
+    elif ! grep -q '^ttyS0:' "$MNT/etc/inittab"; then
+      sed -i '/^tty6:/a ttyS0:linux:/sbin/agetty -L ttyS0 115200 vt100' "$MNT/etc/inittab"
+    fi
+  fi
   if [[ $PROFILE == macbookair ]]; then
     write /etc/modprobe.d/sound.conf <<SND_END
 # CS4208 on MacBook Air 6,x; if the speakers stay silent try model=auto

@@ -50,8 +50,8 @@ Run end to end in QEMU/OVMF from the Gentoo minimal ISO, following the steps abo
 | Download + sha512 verification + unpack of the base tarball, `fresh` over an old install | works |
 | `resume` mode, `scribe update`, spell lookup, interactive `cast` prompts | works; `cast linux` started building `elfutils` |
 | Failure reporting (`FAILED STEPS: …`, non-zero exit) | works |
-| UEFI boot: OVMF → `EFI/BOOT/BOOTX64.EFI` (GRUB 2.14) → kernel → ext4 root mounted → `simpleinit` runs | works with the tarball's stock 3.4.51 kernel |
-| `cast linux`, `cast grub2`, the desktop, a kernel built by the `linux` spell, real hardware | **not tested**: a source build is far too slow without KVM |
+| UEFI boot: OVMF → `EFI/BOOT/BOOTX64.EFI` (GRUB 2.14) → kernel → ext4 root → `simpleinit` → runlevel 3 → **login prompt on the VGA console and on serial; root login works** | works with the tarball's stock 3.4.51 kernel (disk attached as SATA) |
+| `cast linux`, `cast grub2` (so `grub-install`/`grub-mkconfig` as the installer runs them), the desktop, a kernel built by the `linux` spell, real hardware | **not tested**: a source build is far too slow without KVM. The boot above used the live ISO's GRUB with a hand-written `grub.cfg` that mirrors `/etc/default/grub` |
 
 Things this uncovered, now handled or worth knowing:
 
@@ -59,8 +59,11 @@ Things this uncovered, now handled or worth knowing:
   cannot boot from `run-vm.sh`'s virtio disk. Build your own kernel with the drivers in.
 - Modern `mkfs.ext4` defaults (`metadata_csum_seed`, …) are rejected by that old kernel,
   so root is formatted with conservative features (`EXT4_OPTS`, see `install.sh`).
-- The stock kernel gives a **blank VGA screen** under UEFI and `/etc/inittab` has no serial
-  getty; a kernel with `FB_EFI`/`DRM_SIMPLEDRM` fixes the screen.
+- Init stalled after udev coldplug (`Error opening …/dev/initctl`) until the kernel was given
+  `devtmpfs.mount=1`: `simpleinit` keeps its FIFO in `/dev`. The installer now writes that into
+  `/etc/default/grub`, plus `GRUB_GFXPAYLOAD_LINUX=keep` (otherwise the screen stays blank),
+  `GRUB_DISABLE_LINUX_UUID=true` (no initramfs, so `root=UUID=` cannot resolve), and, for the
+  `vm` profile, a serial getty in `/etc/inittab`.
 - `cast` is interactive (e.g. `elfutils` vs `libelf`, initramfs, optional dependencies, the
   kernel menu): press Enter for the defaults. Unattended installs are not supported.
 - `SKIP_CHROOT=1` stops after unpacking the base system; `CA_BUNDLE=` trusts an extra CA
@@ -82,6 +85,8 @@ drivers needed to reach the root filesystem must be built **in** (`=y`, not `=m`
 
 - **VM:** `VIRTIO_PCI`, `VIRTIO_BLK`, `VIRTIO_NET`, `EXT4_FS`, `EFI`/`EFI_STUB`,
   `DEVTMPFS` + `DEVTMPFS_MOUNT`, `DRM_VIRTIO_GPU` (or `DRM_SIMPLEDRM`) for a console.
+- **Always:** `DEVTMPFS` **and `DEVTMPFS_MOUNT=y`** (init stalls without it; the installer also
+  passes `devtmpfs.mount=1`), `FB_EFI` or `DRM_SIMPLEDRM` + `FRAMEBUFFER_CONSOLE` for a visible console.
 - **MacBook Air (Haswell):** `SATA_AHCI`, `EXT4_FS`, `EFI`/`EFI_STUB`, `DRM_I915`,
   `SND_HDA_INTEL` + `SND_HDA_CODEC_CIRRUS`, `SENSORS_APPLESMC`, `X86_INTEL_PSTATE`.
 
