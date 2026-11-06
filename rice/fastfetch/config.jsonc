@@ -1,4 +1,4 @@
-// legenddots fastfetch config — Tokyo Night (same palette as alacritty.toml,
+// legenddots fastfetch config (Source Mage logo variant) — Tokyo Night (same palette as alacritty.toml,
 // tmux.conf, the zsh prompt). Plain fastfetch modules only, so it works on any
 // of the setups and with no Nerd Font. Colours are raw truecolor SGR codes
 // (38;2;R;G;B), not "#rrggbb", which older fastfetch (blfs: 2.26.1) rejects.
@@ -8,9 +8,15 @@
 //   blfs/setup   symlinks it to ~/.config/fastfetch/config.jsonc
 {
   "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json",
+  // The real Source Mage wordmark (sourcemage.org/+download/logo.png: white SOURCEMAGE with the mage hat as the
+  // "A"), converted to truecolor half-blocks by tools/mklogo.py. It is wide, so it goes above the info block.
   "logo": {
-    "padding": { "top": 1, "left": 1, "right": 3 },
-    "color": { "1": "38;2;122;162;247", "2": "38;2;187;154;247", "3": "38;2;125;207;255", "4": "38;2;158;206;106" }
+    "type": "file-raw",
+    "source": "~/.config/fastfetch/logo.ans",
+    "width": 72,
+    "height": 6,
+    "position": "top",
+    "padding": { "top": 1, "left": 1, "bottom": 1 }
   },
   "display": {
     "separator": "  ",

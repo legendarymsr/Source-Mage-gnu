@@ -289,7 +289,7 @@ install_rice() {
   header "Installing the bspwm rice + nvim config (layout: $KB_LAYOUT)"
   local home f
   for home in "$MNT/etc/skel" "$MNT/root"; do
-    for f in bspwm/bspwmrc sxhkd/sxhkdrc dzen2/bar.sh picom/picom.conf rofi/config.rasi dunst/dunstrc nvim/init.lua fastfetch/config.jsonc; do
+    for f in bspwm/bspwmrc sxhkd/sxhkdrc dzen2/bar.sh picom/picom.conf rofi/config.rasi dunst/dunstrc nvim/init.lua fastfetch/config.jsonc fastfetch/logo.ans; do
       case "$f" in
         */bspwmrc) # layout substitution
           if [[ "$DRY_RUN" == 1 ]]; then echo "[dry-run] install rice/$f -> $home/.config/$f (KB_LAYOUT=$KB_LAYOUT)"
