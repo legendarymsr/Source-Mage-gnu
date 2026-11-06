@@ -1,4 +1,4 @@
-# sourcemage — Source Mage GNU/Linux installer (sorcery, UEFI x86_64)
+# Source-Mage-gnu — Source Mage GNU/Linux installer (sorcery, UEFI x86_64)
 
 Same shape as `gentoo/`, `exherbo/` and `kiss/`: partition, unpack a base
 system, fstab, chroot, then sync the grimoire and `cast`. **It wipes the target
@@ -17,12 +17,12 @@ enable it) are compiled, so budget hours.
 ```
 
 Makes a sparse 60G qcow2 + UEFI NVRAM, downloads the Gentoo minimal ISO the
-first time, packs this directory into a read-only virtio disk and boots. In the
+first time, packs the installer into a read-only virtio disk and boots. In the
 live shell:
 
 ```sh
 mkdir -p /root/sm && tar xf /dev/vdb -C /root/sm
-DISK=/dev/vda INSTALL_DESKTOP=no /root/sm/sourcemage/install.sh
+DISK=/dev/vda INSTALL_DESKTOP=no /root/sm/install.sh
 ```
 
 Then power off and `./run-vm.sh` again to boot the installed disk. Use

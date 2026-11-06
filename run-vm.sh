@@ -9,12 +9,12 @@
 #   ./run-vm.sh /x.iso     install using a specific live ISO
 #   ./run-vm.sh pack       just rebuild the installer disk (after editing install.sh)
 #
-# How the installer gets into the guest: this script packs sourcemage/ into a
+# How the installer gets into the guest: this script packs install.sh into a
 # tarball and attaches it READ-ONLY as a 2nd virtio disk (/dev/vdb). In the
 # live ISO's shell:
 #
 #       mkdir -p /root/sm && tar xf /dev/vdb -C /root/sm
-#       DISK=/dev/vda INSTALL_DESKTOP=no /root/sm/sourcemage/install.sh
+#       DISK=/dev/vda INSTALL_DESKTOP=no /root/sm/install.sh
 #
 # (the guest's NAT network gives it internet; no 9p / no git clone needed).
 # `ssh -p 2222 root@localhost` also works once you set a root password in the
@@ -34,7 +34,7 @@ die()    { echo -e "${RED}error:${NC} $*" >&2; exit 1; }
 # comes from the kvm group, not root.
 [[ ${EUID:-$(id -u)} -eq 0 ]] && die "run as your user, not root"
 
-SELF_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"   # …/sourcemage
+SELF_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"   # repo root
 VM_DIR="${VM_DIR:-$HOME/sourcemage-vm}"
 DISK="$VM_DIR/sourcemage.qcow2"
 INSTALLER_TAR="$VM_DIR/installer.tar"
@@ -69,7 +69,7 @@ mkdir -p "$VM_DIR"
 # ── Pack the installer into a tar that is attached as a read-only disk ────────
 pack_installer() {
   header "Packing installer -> $INSTALLER_TAR"
-  tar -cf "$INSTALLER_TAR" -C "$(dirname "$SELF_DIR")" "$(basename "$SELF_DIR")"
+  tar -cf "$INSTALLER_TAR" -C "$SELF_DIR" install.sh README.md
 }
 
 ARG="${1:-}"; ISO=""
@@ -138,7 +138,7 @@ if [[ "$MODE" == install ]]; then
   header "Install mode — booting $ISO"
   echo -e "  ${GREEN}In the live shell, run:${NC}"
   echo "    mkdir -p /root/sm && tar xf /dev/vdb -C /root/sm"
-  echo "    DISK=/dev/vda INSTALL_DESKTOP=no /root/sm/sourcemage/install.sh"
+  echo "    DISK=/dev/vda INSTALL_DESKTOP=no /root/sm/install.sh"
   echo "  (set INSTALL_DESKTOP=yes for Xfce + Firefox: many extra hours)"
 else
   header "Boot mode — starting the installed system"
