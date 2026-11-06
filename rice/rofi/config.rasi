@@ -1,0 +1,5 @@
+/* ~/.config/rofi/config.rasi — ultra minimal (stock theme, no icons) */
+configuration {
+    modi: "drun,run";
+    show-icons: false;
+}

@@ -38,7 +38,7 @@ SELF_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"   # repo root
 VM_DIR="${VM_DIR:-$HOME/sourcemage-vm}"
 DISK="$VM_DIR/sourcemage.qcow2"
 INSTALLER_TAR="$VM_DIR/installer.tar"
-# A source build of Xfce + Firefox needs real room; qcow2 is sparse so this
+# A source build of the bspwm desktop (Xorg, surf/WebKit, neovim) needs real room; qcow2 is sparse so this
 # costs nothing until used.
 DISK_SIZE="${DISK_SIZE:-60G}"
 MEM="${MEM:-4G}"
@@ -69,7 +69,7 @@ mkdir -p "$VM_DIR"
 # ── Pack the installer into a tar that is attached as a read-only disk ────────
 pack_installer() {
   header "Packing installer -> $INSTALLER_TAR"
-  tar -cf "$INSTALLER_TAR" -C "$SELF_DIR" install.sh README.md grimoire
+  tar -cf "$INSTALLER_TAR" -C "$SELF_DIR" install.sh README.md grimoire rice
 }
 
 ARG="${1:-}"; ISO=""
@@ -139,7 +139,7 @@ if [[ "$MODE" == install ]]; then
   echo -e "  ${GREEN}In the live shell, run:${NC}"
   echo "    mkdir -p /root/sm && tar xf /dev/vdb -C /root/sm"
   echo "    DISK=/dev/vda INSTALL_DESKTOP=no /root/sm/install.sh"
-  echo "  (set INSTALL_DESKTOP=yes for Xfce + Firefox: many extra hours)"
+  echo "  (set INSTALL_DESKTOP=yes for the bspwm desktop + rice: many extra hours)"
 else
   header "Boot mode — starting the installed system"
 fi

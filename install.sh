@@ -12,7 +12,7 @@
 #   ./install.sh resume     re-enter an existing install and finish the casts
 #
 # Tunables (env):  DISK PROFILE INSTALL_DESKTOP HOSTNAME_ TIMEZONE USER_NAME
-#                  SWAP_SIZE ESP_SIZE TARBALL_URL VERIFY DRY_RUN ASSUME_YES CA_BUNDLE
+#                  SWAP_SIZE ESP_SIZE TARBALL_URL VERIFY DRY_RUN ASSUME_YES CA_BUNDLE KB_LAYOUT
 #   CA_BUNDLE=/path.pem extra CA file(s) trusted inside the chroot (TLS-inspecting proxy)
 #   EXT4_OPTS="-O ^metadata_csum,^metadata_csum_seed,^orphan_file"  (default) keeps the root
 #               filesystem mountable by the base tarball's old 3.4.51 kernel; set EXT4_OPTS=" "
@@ -48,11 +48,12 @@ ask() { # ask VAR "prompt" default — env wins, else 10s prompt, else default
 ask DISK "Target disk to WIPE?" "/dev/vda"
 if [[ -z "${PROFILE:-}" ]]; then case "$DISK" in /dev/vd*) PROFILE=vm ;; *) PROFILE=macbookair ;; esac; fi
 case "$PROFILE" in vm|macbookair) ;; *) die "PROFILE must be vm or macbookair" ;; esac
-ask INSTALL_DESKTOP "Install the Xfce desktop (Xorg + Xfce + Firefox — a LONG compile)? [yes/no]" "no"
+ask INSTALL_DESKTOP "Install the bspwm desktop + rice (Xorg, bspwm, st, surf, neovim — a LONG compile)? [yes/no]" "no"
 case "${INSTALL_DESKTOP,,}" in y|yes|true) INSTALL_DESKTOP=true ;; *) INSTALL_DESKTOP=false ;; esac
 HOSTNAME_="${HOSTNAME_:-sourcemage}"
 TIMEZONE="${TIMEZONE:-America/New_York}"
 USER_NAME="${USER_NAME:-}"                 # optional unprivileged user (you get a password prompt)
+KB_LAYOUT="${KB_LAYOUT:-se}"           # setxkbmap layout in the bspwm rice (legenddots uses se)
 SWAP_SIZE="${SWAP_SIZE:-4G}"; ESP_SIZE="${ESP_SIZE:-512M}"
 VERIFY="${VERIFY:-true}"
 CA_BUNDLE="${CA_BUNDLE:-}"
@@ -69,9 +70,10 @@ TB="${TARBALL_URL##*/}"
 SPELLS_CORE=(linux grub2 efibootmgr dhcpcd openssh sudo)
 SPELLS_VM=()
 SPELLS_MAC=(linux-firmware microcode_ctl alsa-utils broadcom-wl wpa_supplicant)   # broadcom-wl: local grimoire, see grimoire/
-SPELLS_DESKTOP=(xorg-server xinit xf86-input-libinput mesa dejavu-ttf
-                xfce4-session xfwm4 xfce4-panel xfce4-settings xfdesktop thunar
-                xfce4-terminal xfce4-appfinder firefox)
+# bspwm rice, same stack as legenddots/bspwm (the grimoire has dzen2, not lemonbar) + neovim.
+SPELLS_DESKTOP=(xorg-server xinit xf86-input-libinput mesa dejavu-ttf ttf-jetbrains-mono
+                xsetroot setxkbmap bspwm sxhkd dzen2 picom rofi dunst slock st surf
+                neovim git xclip)
 [[ $PROFILE == macbookair ]] && SPELLS_DESKTOP+=(xf86-video-intel)
 
 # ── Pre-flight ────────────────────────────────────────────────────────────────
@@ -227,6 +229,25 @@ install_local_grimoire() {
   fi
 }
 
+# ── bspwm rice + nvim config (files live in ./rice, deployed to /etc/skel and /root) ──
+install_rice() {
+  [[ -d "$SELF_DIR/rice" ]] || { warn "no rice/ directory next to install.sh — skipping the bspwm rice"; return 0; }
+  header "Installing the bspwm rice + nvim config (layout: $KB_LAYOUT)"
+  local home f
+  for home in "$MNT/etc/skel" "$MNT/root"; do
+    for f in bspwm/bspwmrc sxhkd/sxhkdrc dzen2/bar.sh picom/picom.conf rofi/config.rasi dunst/dunstrc nvim/init.lua; do
+      case "$f" in
+        */bspwmrc) # layout substitution
+          if [[ "$DRY_RUN" == 1 ]]; then echo "[dry-run] install rice/$f -> $home/.config/$f (KB_LAYOUT=$KB_LAYOUT)"
+          else install -D -m 0755 /dev/null "$home/.config/$f"; sed "s/@KB_LAYOUT@/$KB_LAYOUT/" "$SELF_DIR/rice/$f" > "$home/.config/$f"; fi ;;
+        *.sh) run install -D -m 0755 "$SELF_DIR/rice/$f" "$home/.config/$f" ;;
+        *)    run install -D -m 0644 "$SELF_DIR/rice/$f" "$home/.config/$f" ;;
+      esac
+    done
+    run install -D -m 0644 "$SELF_DIR/rice/xinitrc" "$home/.xinitrc"
+  done
+}
+
 # ── Resume path: remount what a fresh install would have mounted ──────────────
 do_resume() {
   header "Resuming existing install"
@@ -238,6 +259,7 @@ do_resume() {
 if [[ $MODE == fresh ]]; then do_fresh; else do_resume; fi
 write_profile_config
 [[ $PROFILE == macbookair ]] && install_local_grimoire
+$INSTALL_DESKTOP && install_rice
 
 if [[ "$SKIP_CHROOT" == 1 ]]; then
   header "SKIP_CHROOT=1 — base system unpacked and configured; skipping the sorcery/chroot phase"
@@ -296,8 +318,13 @@ REST=(); for s in "\${CAST[@]}"; do case "\$s" in linux|grub2|efibootmgr) ;; *) 
 ((\${#REST[@]})) && { cast "\${REST[@]}" || { echo "warn: some casts failed — re-run: ./install.sh resume"; FAILED+=("cast \${REST[*]}"); }; }
 
 echo "── Set the root password"; passwd root || FAILED+=("passwd root")
+if [[ "$INSTALL_DESKTOP" == true ]] && command -v slock >/dev/null; then chmod u+s "\$(command -v slock)"; fi
 if [[ -n "$USER_NAME" ]]; then
   id "$USER_NAME" >/dev/null 2>&1 || useradd -m "$USER_NAME"
+  # users created before the rice was installed do not get /etc/skel: copy it in (never overwrite)
+  if [[ "$INSTALL_DESKTOP" == true && ! -e "/home/$USER_NAME/.config/bspwm" ]]; then
+    cp -rn /etc/skel/. "/home/$USER_NAME/" && chown -R "$USER_NAME:\$(id -gn "$USER_NAME")" "/home/$USER_NAME"
+  fi
   echo "── Set the password for $USER_NAME"; passwd "$USER_NAME" || FAILED+=("passwd $USER_NAME")
 fi
 if ((\${#FAILED[@]})); then echo "FAILED STEPS: \${FAILED[*]}"; exit 1; fi

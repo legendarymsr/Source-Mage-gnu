@@ -25,7 +25,7 @@ DISK=/dev/vda INSTALL_DESKTOP=no /root/sm/install.sh
 ```
 
 Then power off and `./run-vm.sh` again to boot the installed disk. Use
-`INSTALL_DESKTOP=yes` for Xorg + Xfce + Firefox (many more hours).
+`INSTALL_DESKTOP=yes` for Xorg + the bspwm rice + neovim (many more hours; see below).
 Needs `qemu-system-x86_64`, `qemu-img`, OVMF, and `/dev/kvm` access (without
 KVM a source build takes days).
 
@@ -114,5 +114,41 @@ drivers needed to reach the root filesystem must be built **in** (`=y`, not `=m`
 ## Spell lists
 
 Edit `SPELLS_CORE`, `SPELLS_MAC`, `SPELLS_DESKTOP` at the top of `install.sh`.
-There is no `xfce4` meta spell, so the desktop is the individual
-`xfce4-*`/`xfwm4`/`xfdesktop`/`thunar` spells on top of `xorg-server` + `xinit`.
+
+## The bspwm desktop (`INSTALL_DESKTOP=yes`)
+
+Same stack as your `legenddots/bspwm`: **bspwm** + **sxhkd**, **picom**, **rofi**, **dunst**,
+**slock**, **st**, **surf**, Tokyo Night colours, Super as the mod key, plus **neovim**.
+The one swap: the Source Mage grimoire has no `lemonbar`, so the bar is **dzen2** (also plain C,
+fed from the same kind of shell loop: ram · battery · date). The files are in `rice/` and are
+installed into `/etc/skel` (so new users get them), `/root`, and `USER_NAME` if you set it.
+
+```sh
+KB_LAYOUT=se USER_NAME=legend DISK=/dev/vda INSTALL_DESKTOP=yes ./install.sh
+```
+
+`KB_LAYOUT` (default `se`, as in legenddots) is the `setxkbmap` layout. There is no display
+manager: log in on a console and run `startx` (`~/.xinitrc` is `exec bspwm`). `ly` is in the
+grimoire if you want one. `surf` pulls WebKit, the one heavy build.
+
+| key | action |
+|---|---|
+| `super-Return` / `super-e` | st / st running nvim |
+| `super-p` / `super-w` | rofi / surf |
+| `super-q` / `super-shift-q` | close / kill window |
+| `super-{h,j,k,l}` / with `shift` | focus / move in a direction |
+| `super-{1..9}` / with `shift` | switch desktop / send window |
+| `super-t`, `super-shift-space`, `super-f` | tiled, floating, fullscreen |
+| `super-shift-x` | lock (slock, made setuid by the installer) |
+| `super-alt-r` / `super-alt-q` | restart / quit bspwm |
+
+**nvim** (`rice/nvim/init.lua`): a smaller version of your legenddots config. Same options and
+leader (space), Tokyo Night, lazy.nvim, which-key, telescope, nvim-tree, treesitter, lualine,
+gitsigns, indent guides. LSP/mason/cmp, noice and the dashboard are left out, and icons are off
+because the grimoire has JetBrains Mono but not the Nerd Font. Plugins download on first launch
+(needs `git` and network); `<leader>fg` (grep) needs `ripgrep`, which is not installed by default.
+
+Tested: the rice ran in a virtual X server with the real bspwm, sxhkd, picom, dzen2 and st
+(Ubuntu builds), including the key bindings, and the nvim config loaded cleanly on neovim 0.11.1
+(the version the grimoire builds) with all plugins installed. Not tested: building these spells
+on Source Mage, `dunst` (needs a D-Bus session), and treesitter parser downloads.

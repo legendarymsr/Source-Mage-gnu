@@ -1,0 +1,40 @@
+# ~/.config/sxhkd/sxhkdrc — Tokyo Night, minimal (after legenddots/bspwm)
+# super = Mod4 (the Super / "Windows" key)
+
+# terminal · launcher · browser · editor
+super + Return
+	st
+super + p
+	rofi -show drun
+super + w
+	surf about:blank
+super + e
+	st -e nvim
+
+# lock the X screen
+super + shift + x
+	slock
+
+# reload sxhkd · restart bspwm · quit bspwm
+super + Escape
+	pkill -USR1 -x sxhkd
+super + alt + r
+	bspc wm -r
+super + alt + q
+	bspc quit
+
+# close / kill focused window
+super + {_,shift + }q
+	bspc node -{c,k}
+
+# tiled / floating / fullscreen
+super + {t,shift + space,f}
+	bspc node -t {tiled,floating,fullscreen}
+
+# focus (or move) window in a direction
+super + {_,shift + }{h,j,k,l}
+	bspc node -{f,s} {west,south,north,east}
+
+# focus (or send window to) desktop 1–9
+super + {_,shift + }{1-9}
+	bspc {desktop -f,node -d} '^{1-9}'
