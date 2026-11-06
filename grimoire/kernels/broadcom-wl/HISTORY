@@ -1,2 +1,4 @@
 2026-11-06 legendarymsr
 	* DETAILS: new spell, broadcom-sta 6.30.223.271 + Debian -32 patch series
+	* BUILD: pass KCFLAGS=-Wno-error (CONFIG_WERROR=y kernels failed on -Wempty-body)
+	* build-tested against linux 7.2.15

@@ -69,8 +69,10 @@ drivers needed to reach the root filesystem must be built **in** (`=y`, not `=m`
   `wl.ko`, blacklists the conflicting `b43`/`ssb`/`bcma`/`brcmsmac` modules, and
   recasts itself whenever `linux` is cast. You still need **wired/tethered
   internet during the install** (WiFi only works after the first boot) and
-  `CONFIG_CFG80211` in the kernel. Debian's series stops at kernel 7.2; on a
-  newer kernel the build may fail until the series is updated.
+  `CONFIG_CFG80211` in the kernel. Build-tested: `wl.ko` compiles and links against Linux 7.2.15
+  (x86_64, CFG80211 built in) and every kernel symbol it needs is exported, but
+  it has not been loaded on real BCM4360 hardware. Debian's series stops at
+  kernel 7.2; on a newer kernel (e.g. 7.3) the build may fail until it is updated.
 - Microcode is the `microcode_ctl` spell (not `intel-microcode`); there is no
   `mbpfan` spell, so fan control is left to the firmware.
 - Audio gets `snd-hda-intel model=mba6`; if silent, try `model=auto` in
