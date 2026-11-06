@@ -1,0 +1,27 @@
+# ~/.dillo/keysrc — vi-ish keys for Dillo. Only modifier-less keys that
+# don't clash with typing in a form while a text field has focus.
+j = line-down
+k = line-up
+h = left
+l = right
+<ctrl>d = screen-down
+<ctrl>u = screen-up
+<shift>g = bottom
+g = top
+<shift>h = back
+<shift>l = forward
+r = reload
+o = location
+<ctrl>l = location
+/ = find
+t = new-tab
+<ctrl>t = new-tab
+x = close-tab
+<ctrl>w = close-tab
+<shift>j = left-tab
+<shift>k = right-tab
+s = websearch
+b = bookmarks
+<shift>b = add-bookmark
+<ctrl>q = close-all
+f = fullscreen

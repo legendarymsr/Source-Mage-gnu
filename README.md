@@ -42,7 +42,7 @@ destructive command instead of running it.
 ## Unattended install
 
 ```sh
-UNATTENDED=1 ROOT_PASSWORD=... USER_NAME=legend INSTALL_DESKTOP=yes SKIP_SPELLS=surf \
+UNATTENDED=1 ROOT_PASSWORD=... USER_NAME=legend INSTALL_DESKTOP=yes \
   DISK=/dev/vda ./install.sh
 ```
 
@@ -85,7 +85,7 @@ into a disk image (natively in a chroot, then finished and booted under QEMU + O
 | `grub-install --removable` + `grub-mkconfig` in the chroot on a real FAT ESP | works |
 | cold boot under UEFI: OVMF → GRUB → kernel 7.3.1 → ext4 root on a **virtio** disk → `simpleinit` → runlevel 3 → login on VGA and serial | works |
 | desktop: Xorg, mesa (softpipe+virgl), bspwm, sxhkd, picom, rofi, dunst, st, slock, dzen2, neovim built from source; `startx` as a normal user shows the bspwm desktop with the Tokyo Night bar, `super+Return` opens `st`, neovim 0.11 starts | works (screenshots taken) |
-| `surf` (needs `webkitgtk` 2.4.11) | **left out**: hours of compiling, unlikely to build with GCC 15 |
+| **Dillo** (your `dillorc`/`keysrc`) with TLS, PNG, JPEG, GIF and WebP, and **fastfetch** with your config | built; `super+w` opens Dillo tiled next to `st`, `fastfetch` runs in `st` |
 | a from-scratch run of the *final* `install.sh` start to finish | **not done**: the install was assembled over several resumed runs while fixing the issues above, and the last fixes (kernel config via `CONFIG_RESTORE`, extra X libraries, `xauth`) were applied by hand and then folded into the script. Expect to hit one more rough edge |
 | `broadcom-wl` cast, MacBook hardware, rofi/neovim plugins over the network | not tested |
 
@@ -149,7 +149,7 @@ Edit `SPELLS_CORE`, `SPELLS_MAC`, `SPELLS_DESKTOP` at the top of `install.sh`.
 ## The bspwm desktop (`INSTALL_DESKTOP=yes`)
 
 Same stack as your `legenddots/bspwm`: **bspwm** + **sxhkd**, **picom**, **rofi**, **dunst**,
-**slock**, **st**, **surf**, Tokyo Night colours, Super as the mod key, plus **neovim**.
+**slock**, **st**, **Dillo**, Tokyo Night colours, Super as the mod key, plus **neovim**.
 The one swap: the Source Mage grimoire has no `lemonbar`, so the bar is **dzen2** (also plain C,
 fed from the same kind of shell loop: ram · battery · date). The files are in `rice/` and are
 installed into `/etc/skel` (so new users get them), `/root`, and `USER_NAME` if you set it.
@@ -160,12 +160,14 @@ KB_LAYOUT=se USER_NAME=legend DISK=/dev/vda INSTALL_DESKTOP=yes ./install.sh
 
 `KB_LAYOUT` (default `se`, as in legenddots) is the `setxkbmap` layout. There is no display
 manager: log in on a console and run `startx` (`~/.xinitrc` is `exec bspwm`). `ly` is in the
-grimoire if you want one. `surf` pulls WebKit, the one heavy build.
+grimoire if you want one. The browser is **Dillo** with your `dillorc`/`keysrc` (the legenddots rice uses
+surf, which needs a 2015 WebKit that is hours of compiling and unlikely to build with GCC 15). fastfetch is
+installed with your Tokyo Night config.
 
 | key | action |
 |---|---|
 | `super-Return` / `super-e` | st / st running nvim |
-| `super-p` / `super-w` | rofi / surf |
+| `super-p` / `super-w` | rofi / dillo |
 | `super-q` / `super-shift-q` | close / kill window |
 | `super-{h,j,k,l}` / with `shift` | focus / move in a direction |
 | `super-{1..9}` / with `shift` | switch desktop / send window |

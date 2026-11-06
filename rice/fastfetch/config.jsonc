@@ -1,0 +1,44 @@
+// legenddots fastfetch config — Tokyo Night (same palette as alacritty.toml,
+// tmux.conf, the zsh prompt). Plain fastfetch modules only, so it works on any
+// of the setups and with no Nerd Font. Colours are raw truecolor SGR codes
+// (38;2;R;G;B), not "#rrggbb", which older fastfetch (blfs: 2.26.1) rejects.
+//
+//   libre/setup  installs it system-wide: /etc/xdg/fastfetch/config.jsonc
+//                (fastfetch's fallback when ~/.config/fastfetch/ has none)
+//   blfs/setup   symlinks it to ~/.config/fastfetch/config.jsonc
+{
+  "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json",
+  "logo": {
+    "padding": { "top": 1, "left": 1, "right": 3 },
+    "color": { "1": "38;2;122;162;247", "2": "38;2;187;154;247", "3": "38;2;125;207;255", "4": "38;2;158;206;106" }
+  },
+  "display": {
+    "separator": "  ",
+    "color": {
+      "keys": "38;2;122;162;247",      // blue
+      "title": "38;2;187;154;247",     // magenta
+      "output": "38;2;192;202;245",    // foreground
+      "separator": "38;2;86;95;137"    // comment
+    },
+    "key": { "width": 11 }
+  },
+  "modules": [
+    "title",
+    { "type": "separator", "string": "─" },
+    { "type": "os",         "key": "os" },
+    { "type": "kernel",     "key": "kernel" },
+    { "type": "initsystem", "key": "init" },
+    { "type": "uptime",     "key": "uptime" },
+    { "type": "packages",   "key": "packages" },
+    { "type": "shell",      "key": "shell" },
+    { "type": "wm",         "key": "wm" },
+    { "type": "terminal",   "key": "terminal" },
+    { "type": "cpu",        "key": "cpu" },
+    { "type": "gpu",        "key": "gpu" },
+    { "type": "memory",     "key": "memory" },
+    { "type": "swap",       "key": "swap" },
+    { "type": "disk",       "key": "disk" },
+    "break",
+    { "type": "colors", "symbol": "circle" }
+  ]
+}

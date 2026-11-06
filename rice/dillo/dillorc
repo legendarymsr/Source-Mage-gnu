@@ -1,0 +1,40 @@
+# ~/.dillo/dillorc — Dillo (FLTK, no JS), Tokyo Night (from legenddots/dillo).
+# Colours are 0xRRGGBB.
+
+start_page="about:blank"
+home="https://lite.duckduckgo.com/lite/"
+search_url="ddg https://lite.duckduckgo.com/lite/?q=%s"
+
+# page: dark background even when a site asks for white
+bg_color=0x1a1b26
+allow_white_bg=NO
+link_color=0x7aa2f7
+visited_color=0xbb9af7
+contrast_visited_color=YES
+
+# fonts (dejavu ships with the chroot)
+font_serif="DejaVu Serif"
+font_sans_serif="DejaVu Sans"
+font_monospace="DejaVu Sans Mono"
+font_factor=1.0
+
+# UI
+ui_main_bg_color=0x16161e
+ui_fg_color=0xc0caf5
+ui_text_bg_color=0x1a1b26
+ui_selection_color=0x33467c
+ui_button_highlight_color=0x414868
+ui_tab_active_bg_color=0x7aa2f7
+ui_tab_active_fg_color=0x1a1b26
+ui_tab_bg_color=0x24283b
+ui_tab_fg_color=0xa9b1d6
+panel_size=small
+small_icons=YES
+show_tooltip=YES
+fullwindow_start=NO
+
+# privacy / speed
+load_images=YES
+load_stylesheets=YES
+parse_embedded_css=YES
+http_referer=none

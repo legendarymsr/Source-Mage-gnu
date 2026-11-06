@@ -25,7 +25,7 @@
 #   ROOT_PASSWORD=...   set root's password non-interactively (visible in the environment!); USER_PASSWORD likewise
 #                       (defaults to ROOT_PASSWORD)
 #   SAVE_SPACE=1        do not keep sorcery's binary cache or downloaded sources (small disks)
-#   SKIP_SPELLS="surf"  spells to leave out of the list (surf pulls webkitgtk 2.4: hours and ~20 GB)
+#   SKIP_SPELLS="dillo" spells to leave out of the desktop/core lists
 #   SKIP_EFI_CHECK=1    allow running from a non-UEFI host (installing to a disk image / loop device)
 #   PROFILE=vm          virtio guest (default when DISK is /dev/vd*)
 #   PROFILE=macbookair  i5-4250U / HD 5000 / CS4208 / Apple EFI (default else)
@@ -57,7 +57,7 @@ ask() { # ask VAR "prompt" default — env wins, else 10s prompt, else default
 ask DISK "Target disk to WIPE?" "/dev/vda"
 if [[ -z "${PROFILE:-}" ]]; then case "$DISK" in /dev/vd*) PROFILE=vm ;; *) PROFILE=macbookair ;; esac; fi
 case "$PROFILE" in vm|macbookair) ;; *) die "PROFILE must be vm or macbookair" ;; esac
-ask INSTALL_DESKTOP "Install the bspwm desktop + rice (Xorg, bspwm, st, surf, neovim — a LONG compile)? [yes/no]" "no"
+ask INSTALL_DESKTOP "Install the bspwm desktop + rice (Xorg, bspwm, st, dillo, neovim — a LONG compile)? [yes/no]" "no"
 case "${INSTALL_DESKTOP,,}" in y|yes|true) INSTALL_DESKTOP=true ;; *) INSTALL_DESKTOP=false ;; esac
 HOSTNAME_="${HOSTNAME_:-sourcemage}"
 TIMEZONE="${TIMEZONE:-America/New_York}"
@@ -83,13 +83,14 @@ TB="${TARBALL_URL##*/}"
 SPELLS_CORE=(linux grub2 efibootmgr dhcpcd openssh sudo curl git)   # curl (with TLS) then git: git sources (dzen2) and nvim plugins need https
 SPELLS_VM=()
 SPELLS_MAC=(linux-firmware microcode_ctl alsa-utils broadcom-wl wpa_supplicant)   # broadcom-wl: local grimoire, see grimoire/
-# bspwm rice, same stack as legenddots/bspwm (the grimoire has dzen2, not lemonbar) + neovim.
+# bspwm rice, same stack as legenddots/bspwm (the grimoire has dzen2, not lemonbar; Dillo instead of surf) + neovim + fastfetch.
 # xf86-input-evdev instead of -libinput: libinput 1.32 demands Lua >= 5.4 (the grimoire's default lua is 5.1).
 # The libx*/xcb-util-cursor/libnotify entries are optional dependencies that unattended "no" answers would
 # skip, but xsetroot, rofi and dunst cannot build without them: they are cast first (see PRE below).
 SPELLS_DESKTOP=(xserver xinit xf86-input-evdev mesa dejavu-ttf ttf-jetbrains-mono
                 libxcursor xcb-util-cursor libxscrnsaver libxinerama libnotify
-                xsetroot setxkbmap bspwm sxhkd dzen2 picom rofi dunst slock st surf
+                xsetroot setxkbmap bspwm sxhkd dzen2 picom rofi dunst slock st
+                libjpeg-turbo giflib libwebp dillo fastfetch
                 neovim git xclip xauth)
 [[ $PROFILE == macbookair ]] && SPELLS_DESKTOP+=(xf86-video-intel)
 
@@ -288,7 +289,7 @@ install_rice() {
   header "Installing the bspwm rice + nvim config (layout: $KB_LAYOUT)"
   local home f
   for home in "$MNT/etc/skel" "$MNT/root"; do
-    for f in bspwm/bspwmrc sxhkd/sxhkdrc dzen2/bar.sh picom/picom.conf rofi/config.rasi dunst/dunstrc nvim/init.lua; do
+    for f in bspwm/bspwmrc sxhkd/sxhkdrc dzen2/bar.sh picom/picom.conf rofi/config.rasi dunst/dunstrc nvim/init.lua fastfetch/config.jsonc; do
       case "$f" in
         */bspwmrc) # layout substitution
           if [[ "$DRY_RUN" == 1 ]]; then echo "[dry-run] install rice/$f -> $home/.config/$f (KB_LAYOUT=$KB_LAYOUT)"
@@ -298,6 +299,8 @@ install_rice() {
       esac
     done
     run install -D -m 0644 "$SELF_DIR/rice/xinitrc" "$home/.xinitrc"
+    run install -D -m 0644 "$SELF_DIR/rice/dillo/dillorc" "$home/.dillo/dillorc"
+    run install -D -m 0644 "$SELF_DIR/rice/dillo/keysrc"  "$home/.dillo/keysrc"
   done
 }
 
@@ -453,7 +456,7 @@ done
 # desktop cast fails. The linux spell opens a kernel config menu — see the
 # README for the options this machine needs built IN (no initramfs).
 echo "── Casting: \${CAST[*]}"
-for s in linux grub2 efibootmgr curl git mesa libxcursor xcb-util-cursor libxscrnsaver libxinerama libnotify; do
+for s in linux grub2 efibootmgr curl git mesa libxcursor xcb-util-cursor libxscrnsaver libxinerama libnotify libjpeg-turbo giflib libwebp; do
   COPT=()
   # an earlier BIOS build of grub2 (no EFI modules) must be recompiled, not skipped as "no work to do"
   needs_recast "\$s" && is_installed "\$s" && COPT=(-c)
@@ -465,7 +468,7 @@ grub-install --target=x86_64-efi --efi-directory=/boot/efi --removable || { echo
 grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=SourceMage 2>/dev/null || true
 grub-mkconfig -o /boot/grub/grub.cfg || { echo "warn: grub-mkconfig failed"; FAILED+=("grub-mkconfig"); }
 
-REST=(); for s in "\${CAST[@]}"; do case "\$s" in linux|grub2|efibootmgr|curl|git|mesa|libxcursor|xcb-util-cursor|libxscrnsaver|libxinerama|libnotify) ;; *) REST+=("\$s") ;; esac; done
+REST=(); for s in "\${CAST[@]}"; do case "\$s" in linux|grub2|efibootmgr|curl|git|mesa|libxcursor|xcb-util-cursor|libxscrnsaver|libxinerama|libnotify|libjpeg-turbo|giflib|libwebp) ;; *) REST+=("\$s") ;; esac; done
 ((\${#REST[@]})) && { cast "\${REST[@]}" || { echo "warn: some casts failed — re-run: ./install.sh resume"; FAILED+=("cast \${REST[*]}"); }; }
 
 echo "── Set the root password"

@@ -38,7 +38,7 @@ SELF_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"   # repo root
 VM_DIR="${VM_DIR:-$HOME/sourcemage-vm}"
 DISK="$VM_DIR/sourcemage.qcow2"
 INSTALLER_TAR="$VM_DIR/installer.tar"
-# A source build of the bspwm desktop (Xorg, surf/WebKit, neovim) needs real room; qcow2 is sparse so this
+# A source build of the bspwm desktop (Xorg, bspwm, dillo, neovim) needs real room; qcow2 is sparse so this
 # costs nothing until used.
 DISK_SIZE="${DISK_SIZE:-60G}"
 MEM="${MEM:-4G}"
