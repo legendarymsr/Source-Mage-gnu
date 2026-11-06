@@ -12,7 +12,8 @@
 #   ./install.sh resume     re-enter an existing install and finish the casts
 #
 # Tunables (env):  DISK PROFILE INSTALL_DESKTOP HOSTNAME_ TIMEZONE USER_NAME
-#                  SWAP_SIZE ESP_SIZE TARBALL_URL VERIFY DRY_RUN ASSUME_YES
+#                  SWAP_SIZE ESP_SIZE TARBALL_URL VERIFY DRY_RUN ASSUME_YES CA_BUNDLE
+#   CA_BUNDLE=/path.pem extra CA file(s) trusted inside the chroot (TLS-inspecting proxy)
 #   PROFILE=vm          virtio guest (default when DISK is /dev/vd*)
 #   PROFILE=macbookair  i5-4250U / HD 5000 / CS4208 / Apple EFI (default else)
 #   DRY_RUN=1           print every destructive command instead of running it
@@ -50,6 +51,7 @@ TIMEZONE="${TIMEZONE:-America/New_York}"
 USER_NAME="${USER_NAME:-}"                 # optional unprivileged user (you get a password prompt)
 SWAP_SIZE="${SWAP_SIZE:-4G}"; ESP_SIZE="${ESP_SIZE:-512M}"
 VERIFY="${VERIFY:-true}"
+CA_BUNDLE="${CA_BUNDLE:-}"
 TARBALL_URL="${TARBALL_URL:-https://download.sourcemage.org/image/official/test/smgl-test-0.63-20251212_1200-basesystem-x86_64.tar.xz}"
 MNT=/mnt/sourcemage
 SELF_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
@@ -220,6 +222,7 @@ write_profile_config
 header "Preparing chroot"
 for d in dev proc sys; do is_mounted "$MNT/$d" || run mount --rbind "/$d" "$MNT/$d"; done
 run cp -L /etc/resolv.conf "$MNT/etc/resolv.conf"
+[[ -n "$CA_BUNDLE" ]] && run install -D -m 0644 "$CA_BUNDLE" "$MNT/root/ca-bundle.pem"
 
 SPELLS=("${SPELLS_CORE[@]}")
 if [[ $PROFILE == macbookair ]]; then SPELLS+=("${SPELLS_MAC[@]}"); else SPELLS+=("${SPELLS_VM[@]}"); fi
@@ -228,11 +231,20 @@ $INSTALL_DESKTOP && SPELLS+=("${SPELLS_DESKTOP[@]}")
 write /root/sm-chroot.sh <<CHROOT_END
 #!/bin/bash
 set -uo pipefail
-export HOME=/root
+export HOME=/root TERM="${TERM:-linux}"
+# The live ISO's PATH (e.g. Gentoo's) has no /bin, /sbin or /usr/sbin: Source Mage's tools live there.
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+FAILED=()
+if [[ -n "$CA_BUNDLE" ]]; then
+  export SSL_CERT_FILE=/root/ca-bundle.pem CURL_CA_BUNDLE=/root/ca-bundle.pem
+  echo "ca_certificate=/root/ca-bundle.pem" > /root/.wgetrc
+fi
 echo "── Syncing grimoire (scribe update)"
 scribe update || echo "warn: scribe update failed — using the grimoire snapshot from the tarball"
+command -v cast >/dev/null || { echo "error: sorcery (cast) not found in the chroot"; exit 2; }
 
-have_spell() { find /var/lib/sorcery/codex -mindepth 2 -maxdepth 2 -type d -name "\$1" 2>/dev/null | grep -q .; }
+# codex layout is <grimoire>/<section>/<spell>, i.e. 3 levels below /var/lib/sorcery/codex
+have_spell() { find /var/lib/sorcery/codex -mindepth 3 -maxdepth 3 -type d -name "\$1" 2>/dev/null | grep -q .; }
 WANT=(${SPELLS[*]})
 CAST=(); for s in "\${WANT[@]}"; do
   if have_spell "\$s"; then CAST+=("\$s"); else echo "warn: spell '\$s' not in the grimoire — skipping"; fi
@@ -243,30 +255,37 @@ done
 # README for the options this machine needs built IN (no initramfs).
 echo "── Casting: \${CAST[*]}"
 for s in linux grub2 efibootmgr; do
-  [[ " \${CAST[*]} " == *" \$s "* ]] && { cast "\$s" || echo "warn: cast \$s failed (re-run ./install.sh resume)"; }
+  [[ " \${CAST[*]} " == *" \$s "* ]] && { cast "\$s" || { echo "warn: cast \$s failed (re-run ./install.sh resume)"; FAILED+=("cast \$s"); }; }
 done
 
 echo "── Installing GRUB (UEFI, removable path — works on OVMF and Apple EFI)"
-grub-install --target=x86_64-efi --efi-directory=/boot/efi --removable || echo "warn: grub-install --removable failed"
+grub-install --target=x86_64-efi --efi-directory=/boot/efi --removable || { echo "warn: grub-install --removable failed"; FAILED+=("grub-install"); }
 grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=SourceMage 2>/dev/null || true
-grub-mkconfig -o /boot/grub/grub.cfg || echo "warn: grub-mkconfig failed"
+grub-mkconfig -o /boot/grub/grub.cfg || { echo "warn: grub-mkconfig failed"; FAILED+=("grub-mkconfig"); }
 
 REST=(); for s in "\${CAST[@]}"; do case "\$s" in linux|grub2|efibootmgr) ;; *) REST+=("\$s") ;; esac; done
-((\${#REST[@]})) && { cast "\${REST[@]}" || echo "warn: some casts failed — re-run: ./install.sh resume"; }
+((\${#REST[@]})) && { cast "\${REST[@]}" || { echo "warn: some casts failed — re-run: ./install.sh resume"; FAILED+=("cast \${REST[*]}"); }; }
 
-echo "── Set the root password"; passwd root
+echo "── Set the root password"; passwd root || FAILED+=("passwd root")
 if [[ -n "$USER_NAME" ]]; then
   id "$USER_NAME" >/dev/null 2>&1 || useradd -m "$USER_NAME"
-  echo "── Set the password for $USER_NAME"; passwd "$USER_NAME"
+  echo "── Set the password for $USER_NAME"; passwd "$USER_NAME" || FAILED+=("passwd $USER_NAME")
 fi
+if ((\${#FAILED[@]})); then echo "FAILED STEPS: \${FAILED[*]}"; exit 1; fi
 CHROOT_END
 run chmod +x "$MNT/root/sm-chroot.sh"
 
 header "Entering chroot to configure & build (this compiles from source)"
-run chroot "$MNT" /bin/bash /root/sm-chroot.sh
-run rm -f "${MNT:?}/root/sm-chroot.sh"
+CHROOT_RC=0
+run env -i HOME=/root TERM="${TERM:-linux}" PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    chroot "$MNT" /bin/bash /root/sm-chroot.sh || CHROOT_RC=$?
+run rm -f "${MNT:?}/root/sm-chroot.sh" "${MNT:?}/root/ca-bundle.pem" "${MNT:?}/root/.wgetrc"
 
 header "Cleaning up"
 run umount -R "$MNT" || warn "could not unmount everything cleanly"
 run swapoff "$SWAP" 2>/dev/null || true
+if ((CHROOT_RC)); then
+  warn "the chroot phase reported failures (exit $CHROOT_RC) — the system is NOT complete. Fix the errors above and re-run: ./install.sh resume"
+  exit "$CHROOT_RC"
+fi
 echo -e "${GREEN}Done.${NC} Power off, detach the ISO, and boot the disk."
