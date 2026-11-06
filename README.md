@@ -162,11 +162,7 @@ KB_LAYOUT=se USER_NAME=legend DISK=/dev/vda INSTALL_DESKTOP=yes ./install.sh
 manager: log in on a console and run `startx` (`~/.xinitrc` is `exec bspwm`). `ly` is in the
 grimoire if you want one. The browser is **Dillo** with your `dillorc`/`keysrc` (the legenddots rice uses
 surf, which needs a 2015 WebKit that is hours of compiling and unlikely to build with GCC 15). fastfetch is
-installed with your Tokyo Night config and the **real Source Mage logo**: fastfetch's bundled "Source Mage" art
-is a generic blob, so `rice/fastfetch/logo.ans` is the project's wordmark (sourcemage.org, the mage hat as the
-"A") converted to truecolor half-blocks with a transparent background by `tools/mklogo.py`
-(`python3 tools/mklogo.py logo.png rice/fastfetch/logo.ans 72` regenerates it at another width). It is wide, so
-the config prints it above the info block (`"position": "top"`). The artwork belongs to the Source Mage project.
+installed with your Tokyo Night config, minus the `logo.color` override: fastfetch's built-in Source Mage logo keeps its own colours.
 
 | key | action |
 |---|---|
