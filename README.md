@@ -144,6 +144,33 @@ Boot details worth knowing (all handled by `install.sh`):
 | Bootloader | `grub2`, installed to the removable path (works on OVMF and Apple EFI) |
 | Layout | 512M ESP · 4G swap · ext4 root (override with `ESP_SIZE`, `SWAP_SIZE`) |
 
+## Compared with Gentoo and Exherbo
+
+**What's similar.** All three are source-based: packages are compiled on your machine from
+bash build recipes kept in a git-synced repository, and you choose optional features before
+building. The install has the same shape in each: partition, unpack a base tarball (Gentoo's
+stage3, Exherbo's stage, Source Mage's basesystem), chroot, sync the package repo, build a
+kernel, install a bootloader. None of them has a graphical installer, and all expect you to
+read what the build asks.
+
+**What's different.**
+
+| | Source Mage | Gentoo | Exherbo |
+|---|---|---|---|
+| Package manager | sorcery (bash): `cast`, `dispel`, `scribe`, `sorcery` | Portage (Python): `emerge` | Paludis (C++): `cave` |
+| Recipes | spells (`DETAILS`, `DEPENDS`, `BUILD`, ... as separate files) | ebuilds + eclasses | exheres + exlibs |
+| Repositories | grimoires (`test`, `stable`, plus local ones like this repo's) | one main tree + overlays | many small repos (`arbor` plus others), added as needed |
+| Optional features | asked interactively at `cast` time, answers remembered per spell | USE flags, global in `make.conf` or per package | options and suboptions per package in `options.conf` |
+| Default init | `simpleinit` (SysV-style `/etc/inittab`) | OpenRC (systemd optional) | systemd |
+| Binaries | none official; sorcery can cache its own builds | official binary host | pbins (binary packages built with Paludis) |
+| Profiles | none | profiles set defaults per use case | profiles, much thinner |
+| Upstream | packages kept close to upstream, few distro patches | patches more freely | close to upstream, few distro patches |
+
+In practice that means Source Mage has the least to configure up front, but a build stops
+to ask questions. That's why this installer pre-seeds answers and uses `UNATTENDED=1` (see above).
+Gentoo puts the decisions in config files before you build. Exherbo is closest to Gentoo, but
+fine-grained per package and with its repositories split up.
+
 ## You must configure the kernel (no initramfs)
 
 The `linux` spell opens a kernel config menu. There is no initramfs, so the
