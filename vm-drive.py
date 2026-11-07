@@ -5,6 +5,9 @@
 #   vm-drive.py SOCK LOG send  TEXT                   type TEXT (\n and \x03 escapes allowed)
 #   vm-drive.py SOCK LOG run   COMMAND [TIMEOUT]      run a shell command, stream its output, exit with its status
 #   vm-drive.py SOCK LOG put   FILE DEST              copy a (small) file into the guest, base64 over the console
+#   vm-drive.py SOCK LOG secret VAR...                export each VAR in the guest shell with the value of the same
+#                                                     variable in OUR environment; typed into `read -rs`, so it is
+#                                                     never echoed (not in LOG) and never on a command line (not in ps)
 #
 # SOCK is QEMU's  -chardev socket,...,path=SOCK,server=on,logfile=LOG  serial socket. Output is read from LOG (so
 # nothing is lost between calls), input is written to SOCK. Exit codes: 0 ok, 124 timeout, 125 VM exited (set VM_PID), otherwise the command's.
@@ -94,6 +97,21 @@ def main():
                     'echo __SM""DONE_%s__$?__\n' % (dest, dest, want, tag)).encode())
         m, _ = pump(log, off, r"__SMDONE_%s__(\d+)__" % tag, 120, echo=False)
         sys.exit(int(m.group(1)) if m else 124)
+    if action == "secret":
+        for var in args:
+            if not re.fullmatch(r"[A-Z_][A-Z0-9_]*", var) or var not in os.environ:
+                sys.exit("secret: %s is not a set variable name" % var)
+            val = os.environ[var]
+            if "\n" in val or "\r" in val:
+                sys.exit("secret: %s contains a newline" % var)
+            tag = secrets.token_hex(4)
+            off = log_size(log)
+            send(sock, ("IFS= read -rs %s && export %s; echo __SM\"\"DONE_%s__$?__\n" % (var, var, tag)).encode(), 1.0)
+            send(sock, (val + "\n").encode())
+            m, _ = pump(log, off, r"__SMDONE_%s__(\d+)__" % tag, 30, echo=False)
+            if not m or m.group(1) != "0":
+                sys.exit(124 if not m else int(m.group(1)))
+        return
     sys.exit("unknown action: " + action)
 
 

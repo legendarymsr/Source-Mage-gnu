@@ -49,6 +49,10 @@ SOCK="$VM_DIR/serial.sock"; LOG="$VM_DIR/serial.log"; MON="$VM_DIR/monitor.sock"
 DISK_SIZE="${DISK_SIZE:-60G}"; MEM="${MEM:-4G}"; CPUS="${CPUS:-$(nproc)}"; SSH_PORT="${SSH_PORT:-2222}"
 ISO="${ISO:-$HOME/live.iso}"
 ISO_URL="${ISO_URL:-https://distfiles.gentoo.org/releases/amd64/autobuilds/20260913T163055Z/install-amd64-minimal-20260913T163055Z.iso}"
+# sha256 of the default ISO, pinned from Gentoo's signed .sha256 (release key 13EBBDBEDE7A12775DFDB1BABB572E0E2D182910, checked).
+# A custom ISO_URL needs its own ISO_SHA256 (or ISO_SHA256=skip).
+if [[ "$ISO_URL" == "https://distfiles.gentoo.org/releases/amd64/autobuilds/20260913T163055Z/install-amd64-minimal-20260913T163055Z.iso" ]]; then ISO_SHA256="${ISO_SHA256:-4f155acdffd6b9ea88c69a06a22fb4db1ca780d37fd11dd370510ec28a3ab546}"; fi
+ISO_SHA256="${ISO_SHA256:-}"
 FW_CODE="${FW_CODE:-}"; FW_VARS="${FW_VARS:-}"
 PROFILE="${PROFILE:-vm}"
 INSTALL_DESKTOP="${INSTALL_DESKTOP:-yes}"
@@ -171,7 +175,12 @@ header "Resetting UEFI NVRAM"; cp "$FW_VARS" "$NVRAM"     # a stale boot order w
 if [[ ! -f "$ISO" ]]; then
   command -v curl >/dev/null || die "curl not found — needed to fetch the ISO"
   header "Downloading the Gentoo live ISO -> $ISO"
-  curl -fL# -o "$ISO.part" "$ISO_URL" && mv "$ISO.part" "$ISO" || die "ISO download failed ($ISO_URL) — pass ISO=/path.iso"
+  [[ -n "$ISO_SHA256" ]] || die "no ISO_SHA256 for a custom ISO_URL — set ISO_SHA256=<sha256> (or ISO_SHA256=skip)"
+  curl -fL# --proto "=https" --proto-redir "=https" -o "$ISO.part" "$ISO_URL" || die "ISO download failed ($ISO_URL) — pass ISO=/path.iso"
+  if [[ "$ISO_SHA256" != skip ]]; then
+    echo "$ISO_SHA256  $ISO.part" | sha256sum -c --quiet - || { rm -f "$ISO.part"; die "ISO sha256 mismatch — download deleted"; }
+  fi
+  mv "$ISO.part" "$ISO"
 fi
 
 # The live ISO is booted with -kernel/-initrd so the console is the serial line we can type into.
@@ -235,9 +244,14 @@ header "Checking the guest's network"   # (the loop runs in a subshell: a bare e
 g '(for i in $(seq 30); do curl -fsS -o /dev/null -m 8 https://download.sourcemage.org/ && exit 0; sleep 3; done; exit 1)' 200 \
   || die "the guest has no internet (user-mode NAT should give it one: check the host's connection / proxy, CA_BUNDLE)"
 
-# Credentials go in with the terminal's echo off, so they never land in the serial log.
+# Credentials are typed into `read -s` in the guest: never echoed (so not in the serial log) and never part of a
+# command line (so not in `ps` on the host).
 if [[ "$DRY_RUN" != 1 ]]; then
-  g "stty -echo; export ROOT_PASSWORD=$(printf %q "$ROOT_PASSWORD") USER_PASSWORD=$(printf %q "$USER_PASSWORD"); stty echo" 30 >/dev/null
+  ROOT_PASSWORD="$ROOT_PASSWORD" USER_PASSWORD="$USER_PASSWORD" "${DRIVE[@]}" "$SOCK" "$LOG" secret ROOT_PASSWORD USER_PASSWORD \
+    || die "could not pass the passwords to the guest"
+  if grep -qF -- "$ROOT_PASSWORD" "$LOG" || grep -qF -- "$USER_PASSWORD" "$LOG"; then
+    die "a password showed up in $LOG — stopping (delete that log)"
+  fi
 fi
 
 # ── 4. the install itself ─────────────────────────────────────────────────────
