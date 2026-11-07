@@ -1,5 +1,5 @@
 #!/bin/sh
-# ~/.config/fastfetch/www-open — open the Dillo terminal.
+# ~/.config/dillo/www-open — open the Dillo terminal.
 # The terminal page needs a session token (made by www-server, kept in ~/.cache/www-token, mode 0600). It is passed to
 # Dillo through a 0600 file whose meta-refresh points at the terminal, never on a command line, so it does not show up
 # in `ps` for other users.

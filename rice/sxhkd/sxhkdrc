@@ -7,7 +7,7 @@ super + Return
 super + p
 	rofi -show drun
 super + w
-	"$HOME/.config/fastfetch/www-open"
+	"$HOME/.config/dillo/www-open"
 super + shift + w
 	dillo
 super + e

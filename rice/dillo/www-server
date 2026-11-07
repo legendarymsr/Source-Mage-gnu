@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# ~/.config/fastfetch/www-server — a terminal in Dillo.
+# ~/.config/dillo/www-server — a terminal in Dillo.
 #
 # Serves a terminal-style page on http://127.0.0.1:8080 (loopback only). Dillo has no JavaScript, so the prompt is an
 # HTML form: type a command, press Enter, the page comes back with the output appended. Commands run in a real
@@ -19,7 +19,7 @@ HOME = os.path.expanduser("~")
 ROOT = os.path.join(HOME, "www")
 CACHE = os.path.join(HOME, ".cache")
 TOKEN_FILE = os.path.join(CACHE, "www-token")
-GEN = os.path.join(HOME, ".config", "fastfetch", "fastfetch-html")
+GEN = os.path.join(HOME, ".config", "dillo", "fastfetch-html")
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
 HOST_OK = {"localhost:%d" % PORT, "127.0.0.1:%d" % PORT}
 COLS, ROWS, LIMIT_S, CAP = 100, 30, 25, 200_000

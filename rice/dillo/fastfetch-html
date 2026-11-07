@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# ~/.config/fastfetch/fastfetch-html — show fastfetch in Dillo as a terminal-style page.
+# ~/.config/dillo/fastfetch-html — show fastfetch in Dillo as a terminal-style page.
 #
 #   fastfetch-html [output.html]     default: ~/www/fastfetch.html
 #

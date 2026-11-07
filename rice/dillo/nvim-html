@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# ~/.config/fastfetch/nvim-html — a snapshot of the REAL neovim, as a page for Dillo.
+# ~/.config/dillo/nvim-html — a snapshot of the REAL neovim, as a page for Dillo.
 #
 #   nvim-html [file-to-open] [output.html]     default: ~/.config/nvim/init.lua -> ~/www/nvim.html
 #   NVIM_KEYS=' e'  nvim-html                  keys typed after start-up (default: leader+e = file tree)
