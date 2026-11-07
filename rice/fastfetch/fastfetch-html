@@ -1,0 +1,79 @@
+#!/bin/sh
+# ~/.config/fastfetch/fastfetch-html — render fastfetch as a Tokyo Night HTML page for Dillo.
+#
+#   fastfetch-html [output.html]        default: ~/fastfetch.html (opened by super+w)
+#
+# Dillo has no JavaScript and only basic CSS, so this is a static page: real fastfetch output (the built-in
+# Source Mage logo and the system info) wrapped in a tables-and-colours layout. bspwmrc regenerates it on every
+# login; run it by hand to refresh.
+
+out="${1:-$HOME/fastfetch.html}"
+command -v fastfetch >/dev/null 2>&1 || { echo "fastfetch-html: fastfetch not found" >&2; exit 1; }
+
+esc() { sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'; }
+
+# -c none: ignore the colourful config here, we colour it with CSS instead
+logo=$(fastfetch -c none --pipe true -s Break 2>/dev/null | sed '/^[[:space:]]*$/d' | esc)
+info=$(fastfetch -c none --logo none --pipe true \
+  -s title:os:kernel:initsystem:uptime:packages:shell:wm:terminal:cpu:gpu:memory:swap:disk 2>/dev/null)
+
+# fastfetch derives "shell" and "terminal" from its parent processes; when bspwmrc runs this script those are just
+# "sh" and "fastfetch-html", so report the login shell and the terminal the rice uses instead.
+shv=""; [ -n "$SHELL" ] && shv="$(basename "$SHELL") $("$SHELL" --version 2>/dev/null | sed -n '1s/.*version \([0-9][0-9.]*\).*/\1/p')"
+tv="";  command -v st >/dev/null 2>&1 && tv=$(st -v 2>&1 | sed -n 1p)
+
+title=$(printf '%s\n' "$info" | sed -n 1p | esc)
+rows=$(printf '%s\n' "$info" | sed 1d | esc | awk -F': ' -v shv="$shv" -v tv="$tv" '
+  { k = tolower($1); sub(/^[^:]*: /, ""); sub(/ \(\/\)$/, "", k)
+    if (k == "init system") k = "init"; if (k == "window manager") k = "wm"
+    if (k == "shell" && shv != "") $0 = shv
+    if (k == "terminal" && tv != "") $0 = tv
+    printf "<tr><td class=\"k\">%s</td><td class=\"v\">%s</td></tr>\n", k, $0 }')
+now=$(date '+%a %d %b %Y, %H:%M')
+
+cat > "$out" <<HTML_END
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>fastfetch - Source Mage GNU/Linux</title>
+<style type="text/css">
+body    { background-color: #1a1b26; color: #c0caf5; font-family: "JetBrains Mono", monospace; margin: 22px; }
+h1      { color: #bb9af7; font-size: 22px; margin: 0 0 2px 0; }
+p.sub   { color: #565f89; margin: 0 0 18px 0; }
+a       { color: #7aa2f7; }
+pre.logo { color: #7aa2f7; background-color: #16161e; border: 1px solid #414868; padding: 12px 16px; margin: 0 0 16px 0; }
+table.info { background-color: #16161e; border: 1px solid #414868; }
+table.info td { padding: 5px 16px; }
+td.k    { color: #7aa2f7; font-weight: bold; }
+td.v    { color: #c0caf5; }
+h2      { color: #7dcfff; font-size: 15px; margin: 16px 0 8px 0; }
+td.sw   { width: 30px; height: 24px; font-family: "DejaVu Sans", sans-serif; color: #1a1b26; }
+p.foot  { color: #565f89; margin: 22px 0 0 0; font-size: 12px; }
+</style>
+</head>
+<body>
+<h1>$title</h1>
+<p class="sub">Source Mage GNU/Linux &middot; built from source with sorcery</p>
+<pre class="logo">$logo</pre>
+<h2>system</h2>
+<table class="info">
+$rows
+</table>
+<h2>palette</h2>
+<table>
+<tr>
+<td class="sw" style="background-color:#414868">&nbsp;</td>
+<td class="sw" style="background-color:#a9b1d6">&nbsp;</td>
+<td class="sw" style="background-color:#7dcfff">&nbsp;</td>
+<td class="sw" style="background-color:#bb9af7">&nbsp;</td>
+<td class="sw" style="background-color:#7aa2f7">&nbsp;</td>
+<td class="sw" style="background-color:#e0af68">&nbsp;</td>
+<td class="sw" style="background-color:#9ece6a">&nbsp;</td>
+<td class="sw" style="background-color:#f7768e">&nbsp;</td>
+</tr>
+</table>
+<p class="foot">generated $now by fastfetch-html &middot; <a href="file:$out">reload to refresh</a></p>
+</body>
+</html>
+HTML_END

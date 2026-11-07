@@ -10,6 +10,7 @@ sxhkd &                               # keybind daemon
 picom &                               # compositor
 dunst &                               # notifications
 "$HOME/.config/dzen2/bar.sh" &        # the bar: ram · battery · date (dzen2, C)
+( sleep 3; "$HOME/.config/fastfetch/fastfetch-html" ) &   # ~/fastfetch.html: the page Dillo opens (super+w)
 
 bspc monitor -d 1 2 3 4 5 6 7 8 9
 

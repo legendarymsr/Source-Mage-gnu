@@ -165,6 +165,10 @@ manager: log in on a console and run `startx` (`~/.xinitrc` is `exec bspwm`). `l
 grimoire if you want one. The browser is **Dillo** with your `dillorc`/`keysrc` (the legenddots rice uses
 surf, which needs a 2015 WebKit that is hours of compiling and unlikely to build with GCC 15). fastfetch is
 installed with your Tokyo Night config, minus the `logo.color` override: fastfetch's built-in Source Mage logo keeps its own colours.
+`rice/fastfetch/fastfetch-html` turns the real fastfetch output (logo and system info) into
+`~/fastfetch.html`: a Tokyo Night page with a stylesheet, written for Dillo (no JavaScript, basic CSS, so
+tables and colours). bspwm regenerates it at login and `super+w` opens it in Dillo; `super+shift+w` opens a
+blank Dillo. Run `~/.config/fastfetch/fastfetch-html` to refresh it by hand.
 
 | key | action |
 |---|---|
