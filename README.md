@@ -165,10 +165,14 @@ manager: log in on a console and run `startx` (`~/.xinitrc` is `exec bspwm`). `l
 grimoire if you want one. The browser is **Dillo** with your `dillorc`/`keysrc` (the legenddots rice uses
 surf, which needs a 2015 WebKit that is hours of compiling and unlikely to build with GCC 15). fastfetch is
 installed with your Tokyo Night config, minus the `logo.color` override: fastfetch's built-in Source Mage logo keeps its own colours.
-`rice/fastfetch/fastfetch-html` turns the real fastfetch output (logo and system info) into
-`~/fastfetch.html`: a Tokyo Night page with a stylesheet, written for Dillo (no JavaScript, basic CSS, so
-tables and colours). bspwm regenerates it at login and `super+w` opens it in Dillo; `super+shift+w` opens a
-blank Dillo. Run `~/.config/fastfetch/fastfetch-html` to refresh it by hand.
+`rice/fastfetch/fastfetch-html` (Python 3, standard library only; Python is already in the base system) runs the
+real fastfetch with your config and turns its ANSI output (truecolor, bold, the column jumps that put the info beside
+the logo) into a terminal-style page: a dark box with a `user@host:~$ fastfetch` prompt, the coloured output, a
+trailing prompt with a cursor block, and a `back` link. bspwm serves `~/www` on `http://localhost:8080`
+(loopback only, `python3 -m http.server`) and regenerates the page at login; `super+w` opens
+`http://localhost:8080/fastfetch.html` in Dillo, `super+shift+w` a blank Dillo. fastfetch reports the shell and
+terminal from its parent processes, which are the script and bspwm here, so the generator prints the real values
+(`bash`, `st`). Run `~/.config/fastfetch/fastfetch-html` to refresh it by hand.
 
 | key | action |
 |---|---|
