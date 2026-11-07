@@ -154,6 +154,59 @@ Python and Paludis is C++.
 | Build helpers | one-switch distcc, ccache, tmpfs and screen builds *(SM)* | via `FEATURES` | |
 | Source checks | every download checked against a GPG signature or strong hash *(SM)* | Manifest hashes | |
 
+## Community
+
+Each project describes its community in its own words, and the three read very differently.
+Quotes are from each project's own pages. Source Mage's page contrasts itself with "things said
+about the Gentoo community"; that is their claim, and plenty of Gentoo users (this repo's
+author included) would disagree.
+
+**Source Mage: welcoming to people who want to learn.** From
+[Comparison with Gentoo](https://sourcemage.org/Comparison%20with%20Gentoo):
+
+> People who are willing to RTFM and are interested in learning things will find the most value
+> in talking to us or using our software, but we usually try to make everyone reasonably welcome
+> and assume anyone is able to learn more than they know now.
+
+They also say "anyone who can write a patch and wants to try their hand" can become a developer.
+And they openly admit where Gentoo leads: binary packages, package count, architectures and docs.
+They point out that a missing autotools package can be generated from its tarball URL with Quill.
+
+**Gentoo: rules of conduct, and promises from the project.** The
+[Code of Conduct](https://wiki.gentoo.org/wiki/Project:Council/Code_of_conduct) asks you to
+"Be courteous. Though respect is earned, it must start somewhere." It also asks you to give
+accurate information, disagree respectfully, write clearly for a worldwide audience, and "If you
+screw up, take responsibility for your actions." Flaming, trolling, stirring up drama and
+repeatedly spreading misinformation can lead to suspension. That is handled by the Community
+Relations team, and you can appeal to the Council. The
+[Social Contract](https://www.gentoo.org/get-started/philosophy/social-contract.html) lists the
+project's promises: it stays free software, it gives fixes back upstream, and "We will not hide
+problems", so the bug tracker stays public. The
+[philosophy page](https://www.gentoo.org/get-started/philosophy/) sums up the attitude: "The tool
+serves the user rather than the user serving the tool."
+
+**Exherbo: you are expected to take part.** From
+[What we expect from developers](https://exherbo.org/docs/expectations.html):
+
+> First of all you need to understand that using Exherbo is an active commitment. We fully expect
+> you to help with development or other parts of the project.
+
+You are expected to read the docs and man pages first, and to follow advice exactly, so a full
+build log means the full build log. Use `#exherbo` on Libera.Chat, speak up about problems, and
+give back. The [goals on exherbo.org](https://exherbo.org/) set the tone: "All design goals must
+be phrased in such a way that it is hard to use them as slogans to justify stupidity" and "The
+target users know what they are doing". They also include "No interactivity requirement.
+Controllable, repeatable behaviour with up-front configuration", which is the opposite of Source
+Mage asking questions at `cast` time.
+
+| | Source Mage | Gentoo | Exherbo |
+|---|---|---|---|
+| Stated stance | friendly, assumes you can learn | courteous, respectful, accountable | committed contributors who read first |
+| What it asks of you | RTFM, curiosity | follow the Code of Conduct | help develop, read docs, use IRC, give back |
+| Becoming a developer | anyone who can write a patch | via the project's developer process | expected of every user |
+| Main channels | IRC, mailing lists | forums, IRC, mailing lists, Bugzilla | `#exherbo` on Libera.Chat, exherbo-dev list |
+| Enforcement | not described on that page | Community Relations, appeals to the Council | not described on that page |
+
 ## What this means for this installer
 
 Source Mage asks its questions during the build, not in config files, so an unattended
