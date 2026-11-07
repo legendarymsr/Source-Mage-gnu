@@ -199,6 +199,10 @@ ROOT_ARG="root=live:${LABEL:+CDLABEL=$LABEL}"; [[ -n "$LABEL" ]] || ROOT_ARG="ro
 # ── 3. boot the live system headless ──────────────────────────────────────────
 header "Packing installer -> $INSTALLER_TAR"
 tar -cf "$INSTALLER_TAR" -C "$SELF_DIR" install.sh README.md grimoire rice kernel
+if [[ -n "$CA_BUNDLE" ]]; then       # a CA file travels on the same read-only disk (typing it over the console is unreliable)
+  [[ -f "$CA_BUNDLE" ]] || die "CA_BUNDLE not found: $CA_BUNDLE"
+  tar -rf "$INSTALLER_TAR" -C "$(dirname "$CA_BUNDLE")" --transform "s|^$(basename "$CA_BUNDLE")\$|ca.pem|" "$(basename "$CA_BUNDLE")"
+fi
 
 header "Booting the live ISO (headless, serial console)"
 qemu_base
@@ -222,17 +226,14 @@ g() { "${DRIVE[@]}" "$SOCK" "$LOG" run "$@"; }     # run a command in the guest,
 
 g 'export PS1="# "; stty cols 200; echo live shell ready' 30 >/dev/null
 
+g 'mkdir -p /root/sm && tar xf /dev/vdb -C /root/sm && chmod +x /root/sm/install.sh && ls /root/sm' 60 >/dev/null || die "could not unpack the installer in the guest"
 if [[ -n "$CA_BUNDLE" ]]; then
-  [[ -f "$CA_BUNDLE" ]] || die "CA_BUNDLE not found: $CA_BUNDLE"
-  "${DRIVE[@]}" "$SOCK" "$LOG" put "$CA_BUNDLE" /root/ca.pem || die "could not copy CA_BUNDLE into the guest"
-  g 'export CURL_CA_BUNDLE=/root/ca.pem SSL_CERT_FILE=/root/ca.pem' 30 >/dev/null
+  g 'cp /root/sm/ca.pem /root/ca.pem && export CURL_CA_BUNDLE=/root/ca.pem SSL_CERT_FILE=/root/ca.pem' 30 >/dev/null || die "could not install CA_BUNDLE in the guest"
 fi
 
 header "Checking the guest's network"   # (the loop runs in a subshell: a bare exit would log the live shell out)
 g '(for i in $(seq 30); do curl -fsS -o /dev/null -m 8 https://download.sourcemage.org/ && exit 0; sleep 3; done; exit 1)' 200 \
   || die "the guest has no internet (user-mode NAT should give it one: check the host's connection / proxy, CA_BUNDLE)"
-
-g 'mkdir -p /root/sm && tar xf /dev/vdb -C /root/sm && chmod +x /root/sm/install.sh && ls /root/sm' 60 >/dev/null || die "could not unpack the installer in the guest"
 
 # Credentials go in with the terminal's echo off, so they never land in the serial log.
 if [[ "$DRY_RUN" != 1 ]]; then
