@@ -1,0 +1,12 @@
+#!/bin/sh
+# ~/.config/fastfetch/www-open — open the Dillo terminal.
+# The terminal page needs a session token (made by www-server, kept in ~/.cache/www-token, mode 0600). It is passed to
+# Dillo through a 0600 file whose meta-refresh points at the terminal, never on a command line, so it does not show up
+# in `ps` for other users.
+tok="$HOME/.cache/www-token"
+[ -r "$tok" ] || { echo "www-open: www-server is not running (no $tok)" >&2; exit 1; }
+umask 077
+launch="$HOME/.cache/www-launch.html"
+printf '<html><head><meta http-equiv="refresh" content="0;url=http://localhost:8080/?t=%s"></head><body></body></html>\n' \
+  "$(cat "$tok")" > "$launch"
+exec dillo "$launch"

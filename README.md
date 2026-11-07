@@ -165,14 +165,25 @@ manager: log in on a console and run `startx` (`~/.xinitrc` is `exec bspwm`). `l
 grimoire if you want one. The browser is **Dillo** with your `dillorc`/`keysrc` (the legenddots rice uses
 surf, which needs a 2015 WebKit that is hours of compiling and unlikely to build with GCC 15). fastfetch is
 installed with your Tokyo Night config, minus the `logo.color` override: fastfetch's built-in Source Mage logo keeps its own colours.
-`rice/fastfetch/fastfetch-html` (Python 3, standard library only; Python is already in the base system) runs the
-real fastfetch with your config and turns its ANSI output (truecolor, bold, the column jumps that put the info beside
-the logo) into a terminal-style page: a dark box with a `user@host:~$ fastfetch` prompt, the coloured output, a
-trailing prompt with a cursor block, and a `back` link. `rice/fastfetch/www-server` serves `~/www` on
-`http://localhost:8080` (loopback only) and re-runs the generator on every load of `/fastfetch.html`, so a reload in
-Dillo re-runs fastfetch. `super+w` opens it, `super+shift+w` opens a blank Dillo. Nothing is faked:
-fastfetch reads its own process tree, so on this page its `terminal` row says `python3` (the web server) and
-its `shell` row says `fastfetch-html` (the generator), which is what is really running it.
+**A terminal in Dillo.** `super+w` opens `rice/fastfetch/www-server`'s page on `http://localhost:8080`: a dark
+terminal box that first runs `fastfetch`, then gives you a prompt. Dillo has no JavaScript, so the prompt is an HTML
+form: Tab to focus it, type a command, press Enter, and the page comes back with the output appended. Commands run in
+a real pseudo-terminal (colours, `fastfetch`, `ls --color` work), `cd` persists, `clear` empties the screen, each
+command has a 25 s limit and a 200 KB output cap. No full-screen programs (top, nvim): there is no terminal on the other
+end. The colour conversion is `rice/fastfetch/fastfetch-html` (Python 3, standard library only; Python is already in the
+base system), which also writes the static `~/www/fastfetch.html`, regenerated on every load. Nothing is faked:
+fastfetch reads its own process tree, so on this page `terminal` says `python3` (the web server).
+
+Because it runs commands as you, it is locked down:
+
+- loopback only (`127.0.0.1`), and a random per-session token created at start in `~/.cache/www-token` (mode `0600`,
+  directory `0700`); the terminal page and the run endpoint refuse requests without it
+- requests with a foreign `Host` header are refused (DNS rebinding), running needs a `POST`, bodies over 8 KB are refused
+- `super+w` runs `www-open`, which hands the token to Dillo through a `0600` file, so it never appears in `ps`
+- `~/www` (index and the static fastfetch page) is served without a token and holds no secrets
+
+It is a convenience for the one user on the box, not a general web shell: anything running as you, or anything that can
+read your `0600` files, can already do what it does.
 
 | key | action |
 |---|---|
