@@ -1,0 +1,27 @@
+           SPELL=luajit
+case "${LUAJIT_BRANCH}" in
+  snapshot)
+# The grimoire downloads the 2.1 snapshot from repo.or.cz, which answers automated clients with a
+# "making sure you're not a bot" page instead of the tarball. Same commit, cloned over https from GitHub
+# (this local spell overrides it).
+       COMMIT_ID="03c31124cc3b521ef54fe398e110fa55660a5057d"
+         VERSION="2.1.${COMMIT_ID:0:8}"
+          SOURCE=LuaJIT-$VERSION.tar.bz2
+SOURCE_DIRECTORY="$BUILD_DIRECTORY/luajit-git"
+   SOURCE_URL[0]="git_http://github.com/LuaJIT/LuaJIT.git:luajit-git:${COMMIT_ID}"
+   SOURCE_IGNORE=volatile
+;;
+  stable)
+         VERSION=2.0.5
+          SOURCE=LuaJIT-$VERSION.tar.gz
+SOURCE_DIRECTORY="$BUILD_DIRECTORY/LuaJIT-$VERSION"
+   SOURCE_URL[0]="http://luajit.org/download/$SOURCE"
+     SOURCE_HASH=sha512:2636675602b4a060b0571c05220db2061dd2f38568e35b2be346a0f5e3128d87057d11d3d0d7567d8cc4e0817b5e4cf2c52a17a48065520962b157816465a9fe
+esac
+        WEB_SITE="http://luajit.org/"
+         ENTERED=20121222
+      LICENSE[0]=MIT
+           SHORT="a just-in-time compiler for Lua"
+cat << EOT
+LuaJIT is a just-in-time compiler for Lua. The snapshot branch (2.1) is what neovim and lazy.nvim need.
+EOT
