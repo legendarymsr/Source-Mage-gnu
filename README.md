@@ -21,8 +21,8 @@ output, then powers off and boots the installed desktop in a window. Interrupted
 Run it again — it resumes. `./setup-vm.sh install` stops before the final boot,
 `./setup-vm.sh boot` only boots, `DRY_RUN=1 ./setup-vm.sh` changes nothing.
 Options (`USER_NAME`, `KB_LAYOUT`, `INSTALL_DESKTOP=no`, `CA_BUNDLE`, ...) are
-listed at the top of the script. Tested up to the dry-run install; the full
-unattended run through this wrapper has not been repeated yet.
+listed at the top of the script. The dry run passes end to end; a real run was verified through the base tarball, password hand-off and the start of
+the casts (see Test status).
 
 ## Install it in a VM by hand
 
@@ -92,6 +92,24 @@ TLS, so `git` could not clone over https), and builds `curl` before `git`. `xorg
 
 ## Test status
 
+### Re-test, 2026-11-07 (8-core Linux box; KVM there was broken, so builds ran natively and boots used QEMU TCG)
+
+| Step | Result |
+|---|---|
+| `shellcheck -S warning` on install.sh / setup-vm.sh / run-vm.sh, `bash -n`, `py_compile` | clean |
+| `DRY_RUN=1 ./setup-vm.sh install`: ISO download + sha256, boot the live ISO headless, type the installer over serial, dry-run `install.sh` | works end to end |
+| `./setup-vm.sh install` (real, TCG): live boot, network check, passwords through `read -s` (checked: **not** in `serial.log`), partition, base tarball https download + pinned sha512, unpack, start of the casts | works; stopped there (TCG + this box blocks plain http/ftp, which sorcery's source downloads use) |
+| `install.sh fresh` + `resume` into a loop-device disk (`UNATTENDED=1 INSTALL_DESKTOP=no PROFILE=vm`), plain http/ftp sent through a local https-rewriting proxy | scribe update, **elfutils, linux 7.3.3** (from `kernel/vm.config`), grub2, efibootmgr, dhcpcd, openssh, sudo, curl, git all cast; passwords set |
+| cold boot of that disk: OVMF → GRUB → kernel 7.3.3 → ext4 root on virtio → runlevel 3 → serial login prompt | works (GRUB EFI image written with mtools: this box cannot mount vfat, so `grub-install` itself was not exercised here) |
+| desktop (`INSTALL_DESKTOP=yes`), MacBook hardware, `broadcom-wl` | **not re-tested** |
+
+Bugs this run found and fixed: the kernel never built (`gelf.h` missing; elfutils is now cast first), `scribe update`
+would have pulled the official grimoire over the local one (its symlinked `GRIMOIRE` carried the official URL),
+the base tarball came over plain http after a redirect, and the passwords could reach the serial log / `ps`.
+Cosmetic boot noise left as is: `udev` service missing, `mdadm: command not found` from `mountroot.sh`.
+
+### Earlier run (author environment, 4-core VM, no KVM)
+
 Run in this repo's author environment (4-core Linux VM, no KVM): the installer built a real system
 into a disk image (natively in a chroot, then finished and booted under QEMU + OVMF):
 
@@ -121,7 +139,7 @@ Boot details worth knowing (all handled by `install.sh`):
 
 | Piece | Choice |
 |---|---|
-| Base system | official `smgl-test-0.63-20251212_1200-basesystem-x86_64.tar.xz`, sha512-verified |
+| Base system | official `smgl-test-0.63-20251212_1200-basesystem-x86_64.tar.xz` over https, pinned sha512 (from a copy whose `.sig` verified) |
 | Grimoire | `scribe update` (the tarball ships a snapshot; spell names are re-checked in the chroot and missing ones are skipped with a warning) |
 | Bootloader | `grub2`, installed to the removable path (works on OVMF and Apple EFI) |
 | Layout | 512M ESP · 4G swap · ext4 root (override with `ESP_SIZE`, `SWAP_SIZE`) |
