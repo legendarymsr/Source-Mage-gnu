@@ -114,7 +114,7 @@ SPELLS_DESKTOP=(xserver xinit xf86-input-evdev mesa dejavu-ttf ttf-jetbrains-mon
                 libxcursor xcb-util-cursor libxscrnsaver libxinerama libnotify
                 xsetroot setxkbmap bspwm sxhkd dzen2 picom rofi dunst slock st
                 libjpeg-turbo giflib libwebp dillo fastfetch
-                neovim git xclip xauth)
+                luajit neovim git xclip xauth)   # luajit before neovim: lazy.nvim needs a LuaJIT neovim (see CAST loop)
 [[ $PROFILE == macbookair ]] && SPELLS_DESKTOP+=(xf86-video-intel)
 
 # Unattended kernel: for the VM profile use kernel/vm.config (defconfig + EFI framebuffer console, Bochs/virtio
@@ -477,6 +477,7 @@ needs_recast() {
   case "\$1" in
     grub2) [[ -d /usr/lib/grub/i386-pc && ! -d /usr/lib/grub/x86_64-efi ]] ;;
     mesa)  [[ ! -e /usr/include/EGL/egl.h ]] ;;
+    neovim) command -v nvim >/dev/null && ! nvim --version 2>/dev/null | grep -qi luajit ;;   # lazy.nvim needs LuaJIT, not PUC Lua
     *)     return 1 ;;
   esac
 }
@@ -493,7 +494,7 @@ done
 # desktop cast fails. The linux spell opens a kernel config menu — see the
 # README for the options this machine needs built IN (no initramfs).
 echo "── Casting: \${CAST[*]}"
-for s in elfutils linux grub2 efibootmgr curl git mesa libxcursor xcb-util-cursor libxscrnsaver libxinerama libnotify libjpeg-turbo giflib libwebp; do
+for s in elfutils linux grub2 efibootmgr curl git mesa libxcursor xcb-util-cursor libxscrnsaver libxinerama libnotify libjpeg-turbo giflib libwebp luajit; do
   COPT=()
   # an earlier BIOS build of grub2 (no EFI modules) must be recompiled, not skipped as "no work to do"
   needs_recast "\$s" && is_installed "\$s" && COPT=(-c)
@@ -505,7 +506,7 @@ grub-install --target=x86_64-efi --efi-directory=/boot/efi --removable || { echo
 grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=SourceMage 2>/dev/null || true
 grub-mkconfig -o /boot/grub/grub.cfg || { echo "warn: grub-mkconfig failed"; FAILED+=("grub-mkconfig"); }
 
-REST=(); for s in "\${CAST[@]}"; do case "\$s" in elfutils|linux|grub2|efibootmgr|curl|git|mesa|libxcursor|xcb-util-cursor|libxscrnsaver|libxinerama|libnotify|libjpeg-turbo|giflib|libwebp|sudo) ;; *) REST+=("\$s") ;; esac; done
+REST=(); for s in "\${CAST[@]}"; do case "\$s" in elfutils|linux|grub2|efibootmgr|curl|git|mesa|libxcursor|xcb-util-cursor|libxscrnsaver|libxinerama|libnotify|libjpeg-turbo|giflib|libwebp|luajit|sudo) ;; *) REST+=("\$s") ;; esac; done
 ((\${#REST[@]})) && { cast "\${REST[@]}" || { echo "warn: some casts failed — re-run: ./install.sh resume"; FAILED+=("cast \${REST[*]}"); }; }
 # sudo asks sorcery for its TEXT-EDITOR provider and gets neovim when neovim is in the same cast list; its build runs
 # a hash check for neovim, so it must come after everything else (otherwise: "hash: neovim: not found")
