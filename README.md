@@ -170,9 +170,9 @@ real fastfetch with your config and turns its ANSI output (truecolor, bold, the 
 the logo) into a terminal-style page: a dark box with a `user@host:~$ fastfetch` prompt, the coloured output, a
 trailing prompt with a cursor block, and a `back` link. `rice/fastfetch/www-server` serves `~/www` on
 `http://localhost:8080` (loopback only) and re-runs the generator on every load of `/fastfetch.html`, so a reload in
-Dillo re-runs fastfetch. `super+w` opens it, `super+shift+w` opens a blank Dillo. On Linux fastfetch reads the
-process tree (parent = shell, grandparent = terminal), so the generator runs it as python → `dillo` (a copy of `sh`
-with that name) → bash → fastfetch, and fastfetch itself reports `terminal dillo` and the real shell version.
+Dillo re-runs fastfetch. `super+w` opens it, `super+shift+w` opens a blank Dillo. Nothing is faked:
+fastfetch reads its own process tree, so on this page its `terminal` row says `python3` (the web server) and
+its `shell` row says `fastfetch-html` (the generator), which is what is really running it.
 
 | key | action |
 |---|---|

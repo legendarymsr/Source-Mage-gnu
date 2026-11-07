@@ -3,12 +3,13 @@
 #
 #   fastfetch-html [output.html]     default: ~/www/fastfetch.html
 #
-# Runs the real fastfetch with YOUR config (colours included), converts its ANSI output to HTML and wraps it in a
-# dark "terminal" box with a prompt line and a cursor. www-server serves ~/www on http://localhost:8080 and runs this
-# on every load of /fastfetch.html, so reloading Dillo re-runs fastfetch (Terminal: dillo); super+w opens it. Standard library only; Dillo has no
-# JavaScript and basic CSS, so the page is a <pre> full of coloured <span>s.
+# Runs the real fastfetch with YOUR config (colours included) and converts its ANSI output to HTML inside a dark
+# "terminal" box with a prompt line and a cursor. www-server serves ~/www on http://localhost:8080 and runs this on
+# every load of /fastfetch.html, so reloading Dillo re-runs fastfetch; super+w opens it. Nothing is faked: fastfetch
+# reports what it really detects (its parent is the python web server, so shell/terminal show that). Standard
+# library only; Dillo has no JavaScript and basic CSS, so the page is a <pre> full of coloured <span>s.
 
-import getpass, html, json, os, re, shlex, shutil, socket, subprocess, sys, tempfile
+import getpass, html, os, re, shutil, socket, subprocess, sys
 
 HOME = os.path.expanduser("~")
 OUT = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HOME, "www", "fastfetch.html")
@@ -19,67 +20,11 @@ BASE16 = ["#15161e", "#f7768e", "#9ece6a", "#e0af68", "#7aa2f7", "#bb9af7", "#7d
 FG, BOX, PAGE = "#c0caf5", "#1a1b26", "#16161e"
 
 
-def strip_jsonc(text):
-    """Remove // and /* */ comments, but not inside strings (the $schema URL contains //)."""
-    out, i, n, in_str = [], 0, len(text), False
-    while i < n:
-        c = text[i]
-        if in_str:
-            out.append(c)
-            if c == "\\":
-                out.append(text[i + 1]); i += 1
-            elif c == '"':
-                in_str = False
-        elif c == '"':
-            in_str = True; out.append(c)
-        elif text.startswith("//", i):
-            while i < n and text[i] != "\n":
-                i += 1
-            continue
-        elif text.startswith("/*", i):
-            i = text.find("*/", i) + 2
-            continue
-        else:
-            out.append(c)
-        i += 1
-    return "".join(out)
-
-
-def run(cmd):
-    try:
-        return subprocess.run(cmd, capture_output=True, text=True, timeout=10, stdin=subprocess.DEVNULL).stdout.strip()
-    except Exception:
-        return ""
-
-
-def load_config():
-    for p in (os.path.join(HOME, ".config/fastfetch/config.jsonc"), "/etc/xdg/fastfetch/config.jsonc"):
-        if os.path.exists(p):
-            with open(p) as f:
-                return json.loads(strip_jsonc(f.read()))
-    return {}
-
-
 def fastfetch_ansi():
-    cfg = load_config()
-    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as tmp:
-        json.dump(cfg, tmp)
-    # On Linux fastfetch reads the process tree: the parent is the SHELL, the grandparent the TERMINAL (TERM_PROGRAM
-    # is ignored). The reader's terminal is Dillo, so run  python -> "dillo" -> bash -> fastfetch, where "dillo" is a
-    # copy of sh with that name (a symlink does not work: fastfetch resolves /proc/<pid>/exe and sees the real sh).
-    # The trailing "; :" keeps each shell from exec-ing its last command, which would remove it from the tree.
-    tmpdir = tempfile.mkdtemp(prefix="fastfetch-html-")
-    link = os.path.join(tmpdir, "dillo")
-    shutil.copy2("/bin/sh", link)
-    try:
-        shell = os.environ.get("SHELL", "/bin/bash")
-        args = " ".join(shlex.quote(a) for a in ("fastfetch", "-c", tmp.name, "--pipe", "false"))
-        inner = "%s -c %s; :" % (shlex.quote(shell), shlex.quote(args + "; :"))
-        r = subprocess.run([link, "-c", inner], capture_output=True, text=True,
-                           env=dict(os.environ, TERM="xterm-256color"), stdin=subprocess.DEVNULL, timeout=30)
-        return r.stdout
-    finally:
-        os.unlink(tmp.name); os.unlink(link); os.rmdir(tmpdir)
+    """The real fastfetch output, colours included (--pipe false keeps the ANSI codes when stdout is a pipe)."""
+    r = subprocess.run(["fastfetch", "--pipe", "false"], capture_output=True, text=True,
+                       env=dict(os.environ, TERM="xterm-256color"), stdin=subprocess.DEVNULL, timeout=30)
+    return r.stdout
 
 
 def xterm256(n):
