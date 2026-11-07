@@ -139,7 +139,7 @@ Boot details worth knowing (all handled by `install.sh`):
 
 | Piece | Choice |
 |---|---|
-| Base system | official `smgl-test-0.63-20251212_1200-basesystem-x86_64.tar.xz` over https, pinned sha512 (from a copy whose `.sig` verified) |
+| Base system | official `smgl-test-0.63-20251212_1200-basesystem-x86_64.tar.xz` over https from ftp.accum.se (Sweden), falling back to mirror.sobukus.de (Germany) and ftp.icm.edu.pl (Poland); pinned sha512 (from a copy whose `.sig` verified) |
 | Grimoire | `scribe update` (the tarball ships a snapshot; spell names are re-checked in the chroot and missing ones are skipped with a warning) |
 | Bootloader | `grub2`, installed to the removable path (works on OVMF and Apple EFI) |
 | Layout | 512M ESP · 4G swap · ext4 root (override with `ESP_SIZE`, `SWAP_SIZE`) |

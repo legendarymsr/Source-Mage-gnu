@@ -12,7 +12,7 @@
 #   ./install.sh resume     re-enter an existing install and finish the casts
 #
 # Tunables (env):  DISK PROFILE INSTALL_DESKTOP HOSTNAME_ TIMEZONE USER_NAME
-#                  SWAP_SIZE ESP_SIZE TARBALL_URL TARBALL_SHA512 VERIFY DRY_RUN ASSUME_YES CA_BUNDLE KB_LAYOUT
+#                  SWAP_SIZE ESP_SIZE TARBALL_MIRRORS TARBALL_URL TARBALL_SHA512 VERIFY DRY_RUN ASSUME_YES CA_BUNDLE KB_LAYOUT
 #   CA_BUNDLE=/path.pem extra CA file(s) trusted inside the chroot (TLS-inspecting proxy)
 #   EXT4_OPTS="-O ^metadata_csum,^metadata_csum_seed,^orphan_file"  (default) keeps the root
 #               filesystem mountable by the base tarball's old 3.4.51 kernel; set EXT4_OPTS=" "
@@ -73,19 +73,26 @@ SKIP_SPELLS="${SKIP_SPELLS:-}"
 JOBS="${JOBS:-$(nproc 2>/dev/null || echo 1)}"
 EXT4_OPTS="${EXT4_OPTS--O ^metadata_csum,^metadata_csum_seed,^orphan_file}"
 SKIP_CHROOT="${SKIP_CHROOT:-0}"
-# download.sourcemage.org only redirects to a mirror over plain http, so the default points at that mirror's https side.
-# The sha512 is pinned (taken from a copy whose .sig verified against Source Mage developer key
-# 4746AECF3E0B39BEF7C212ED478240C4FA5A74CE, shipped in sorcery-pubkeys): a compromised mirror cannot swap the tarball. A custom TARBALL_URL without TARBALL_SHA512 falls back to the published .sha512.
-TARBALL_DEFAULT=https://mirror.sobukus.de/files/sourcemage/image/official/test/smgl-test-0.63-20251212_1200-basesystem-x86_64.tar.xz
-TARBALL_URL="${TARBALL_URL:-$TARBALL_DEFAULT}"
-if [[ "$TARBALL_URL" == "$TARBALL_DEFAULT" ]]; then
+# Base tarball: tried in order over https only (download.sourcemage.org itself only redirects to plain http).
+#   1. ftp.accum.se  — Academic Computer Club, Umeå, Sweden (on sourcemage.org's mirror list)
+#   2. mirror.sobukus.de — Germany (on sourcemage.org's mirror list; download.sourcemage.org's redirect target)
+#   3. ftp.icm.edu.pl — ICM, Warsaw, Poland
+# Each was checked to serve this exact file with the pinned sha512, which comes from a copy whose .sig verified against
+# Source Mage developer key 4746AECF3E0B39BEF7C212ED478240C4FA5A74CE (shipped in sorcery-pubkeys), so no mirror can
+# swap the tarball. A download failure or mismatch falls through to the next mirror. TARBALL_MIRRORS="url ..." replaces
+# the list; TARBALL_URL=... uses just that URL (without TARBALL_SHA512 it falls back to the published .sha512).
+TARBALL_PATH=image/official/test/smgl-test-0.63-20251212_1200-basesystem-x86_64.tar.xz
+read -ra MIRRORS <<< "${TARBALL_MIRRORS:-https://ftp.accum.se/mirror/sourcemage.org https://mirror.sobukus.de/files/sourcemage https://ftp.icm.edu.pl/pub/Linux/dist/sourcemage}"
+if [[ -n "${TARBALL_URL:-}" ]]; then URLS=("$TARBALL_URL")
+else
+  URLS=(); for m in "${MIRRORS[@]}"; do URLS+=("${m%/}/$TARBALL_PATH"); done
   TARBALL_SHA512="${TARBALL_SHA512:-579b164e393f0bb4ea2541d5818eaf75208e523fd954386b195bf0eb02cdc77c1bd486208ff707a3b05758d6e526e639870aaf6fd71405907b2b01ae2a8934b6}"
 fi
 TARBALL_SHA512="${TARBALL_SHA512:-}"
 CURL=(curl -fL --proto "=https" --proto-redir "=https" --retry 3)    # https only, also after redirects
 MNT=/mnt/sourcemage
 SELF_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
-TB="${TARBALL_URL##*/}"
+TB="${URLS[0]##*/}"
 
 # Spell names below were checked against the grimoire inside the base tarball
 # (codex "test", 2025-12-12). The chroot phase re-checks them and skips (with a
@@ -189,18 +196,24 @@ do_fresh() {
 
   header "Downloading base system ${TB}"
   if [[ "$DRY_RUN" == 1 ]]; then
-    echo "[dry-run] ${CURL[*]} -# -O $TARBALL_URL  (+ sha512 verify)"
+    for u in "${URLS[@]}"; do echo "[dry-run] ${CURL[*]} -# -o $MNT/$TB $u  (+ sha512 verify; next mirror on failure)"; done
   else
-    ( cd "$MNT" && "${CURL[@]}" -# -O "$TARBALL_URL" ) || die "download failed: $TARBALL_URL"
-    if [[ "$VERIFY" == "true" ]]; then
-      header "Verifying sha512"
-      if [[ -z "$TARBALL_SHA512" ]]; then
+    local u ok=0 sum
+    for u in "${URLS[@]}"; do
+      echo "  from $u"
+      rm -f "${MNT:?}/${TB:?}"
+      "${CURL[@]}" -# -o "$MNT/$TB" "$u" || { warn "download failed: $u"; continue; }
+      [[ "$VERIFY" == "true" ]] || { ok=1; break; }
+      sum="$TARBALL_SHA512"
+      if [[ -z "$sum" ]]; then
         warn "no pinned TARBALL_SHA512 for a custom TARBALL_URL — using the mirror's own .sha512 (catches corruption, not tampering)"
-        TARBALL_SHA512=$("${CURL[@]}" -s "${TARBALL_URL}.sha512" | awk 'NR==1 {print $1}') || true
-        [[ -n "$TARBALL_SHA512" ]] || die "no .sha512 for $TARBALL_URL — set TARBALL_SHA512=... or VERIFY=false"
+        sum=$("${CURL[@]}" -s "${u}.sha512" | awk 'NR==1 {print $1}') || true
+        [[ -n "$sum" ]] || { warn "no .sha512 for $u — set TARBALL_SHA512=... or VERIFY=false"; continue; }
       fi
-      echo "$TARBALL_SHA512  $MNT/$TB" | sha512sum -c - || { rm -f "${MNT:?}/${TB:?}"; die "sha512 mismatch — tarball deleted, aborting"; }
-    fi
+      if echo "$sum  $MNT/$TB" | sha512sum -c --quiet -; then echo "  sha512 OK"; ok=1; break; fi
+      warn "sha512 mismatch from $u — trying the next mirror"
+    done
+    ((ok)) || { rm -f "${MNT:?}/${TB:?}"; die "could not get a verified base tarball from: ${URLS[*]}"; }
   fi
   header "Unpacking into ${MNT}"
   run tar xpf "$MNT/$TB" -C "$MNT" --xattrs-include='*.*' --numeric-owner
