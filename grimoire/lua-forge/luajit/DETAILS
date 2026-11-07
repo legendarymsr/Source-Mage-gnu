@@ -6,7 +6,7 @@ case "${LUAJIT_BRANCH}" in
 # GitHub (this local spell overrides it). A branch, not a commit id: the git handler fetches by ref name.
          VERSION=2.1
           SOURCE=LuaJIT-$VERSION.tar.bz2
-SOURCE_DIRECTORY="$BUILD_DIRECTORY/luajit-git"
+SOURCE_DIRECTORY="$BUILD_DIRECTORY/LuaJIT-$VERSION"
    SOURCE_URL[0]="git_http://github.com/LuaJIT/LuaJIT.git:luajit-git:v2.1"
   FORCE_DOWNLOAD=on
    SOURCE_IGNORE=volatile
