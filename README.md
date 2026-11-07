@@ -9,7 +9,22 @@ enable it) are compiled, so budget hours.
 > up to a booting base system; the compile steps (kernel, `grub2`, desktop) and real
 > hardware have not been exercised. Expect to fix something on the first real run.
 
-## Install it in a VM (KVM)
+## Install it in a VM (KVM) — one command
+
+```sh
+./setup-vm.sh            # asks for a user name + passwords once, then does everything
+```
+
+Creates the disk and UEFI NVRAM, downloads the Gentoo live ISO, boots it headless,
+types the installer into it over the serial console (`vm-drive.py`), streams the
+output, then powers off and boots the installed desktop in a window. Interrupted?
+Run it again — it resumes. `./setup-vm.sh install` stops before the final boot,
+`./setup-vm.sh boot` only boots, `DRY_RUN=1 ./setup-vm.sh` changes nothing.
+Options (`USER_NAME`, `KB_LAYOUT`, `INSTALL_DESKTOP=no`, `CA_BUNDLE`, ...) are
+listed at the top of the script. Tested up to the dry-run install; the full
+unattended run through this wrapper has not been repeated yet.
+
+## Install it in a VM by hand
 
 ```sh
 ./run-vm.sh
