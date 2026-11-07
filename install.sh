@@ -12,7 +12,7 @@
 #   ./install.sh resume     re-enter an existing install and finish the casts
 #
 # Tunables (env):  DISK PROFILE INSTALL_DESKTOP HOSTNAME_ TIMEZONE USER_NAME
-#                  SWAP_SIZE ESP_SIZE TARBALL_URL VERIFY DRY_RUN ASSUME_YES CA_BUNDLE KB_LAYOUT
+#                  SWAP_SIZE ESP_SIZE TARBALL_URL TARBALL_SHA512 VERIFY DRY_RUN ASSUME_YES CA_BUNDLE KB_LAYOUT
 #   CA_BUNDLE=/path.pem extra CA file(s) trusted inside the chroot (TLS-inspecting proxy)
 #   EXT4_OPTS="-O ^metadata_csum,^metadata_csum_seed,^orphan_file"  (default) keeps the root
 #               filesystem mountable by the base tarball's old 3.4.51 kernel; set EXT4_OPTS=" "
@@ -22,7 +22,8 @@
 #   UNATTENDED=1        no questions: stdin is /dev/null so every cast prompt takes its default, and
 #                       the kernel is built from `make defconfig` (boots in QEMU/virtio; for real
 #                       hardware prefer the interactive kernel menu). Pair with ROOT_PASSWORD=...
-#   ROOT_PASSWORD=...   set root's password non-interactively (visible in the environment!); USER_PASSWORD likewise
+#   ROOT_PASSWORD=...   set root's password non-interactively (handed to the chroot in a 0600 file that is
+#                       deleted afterwards, never written into the build script); USER_PASSWORD likewise
 #                       (defaults to ROOT_PASSWORD)
 #   SAVE_SPACE=1        do not keep sorcery's binary cache or downloaded sources (small disks)
 #   SKIP_SPELLS="dillo" spells to leave out of the desktop/core lists
@@ -72,7 +73,16 @@ SKIP_SPELLS="${SKIP_SPELLS:-}"
 JOBS="${JOBS:-$(nproc 2>/dev/null || echo 1)}"
 EXT4_OPTS="${EXT4_OPTS--O ^metadata_csum,^metadata_csum_seed,^orphan_file}"
 SKIP_CHROOT="${SKIP_CHROOT:-0}"
-TARBALL_URL="${TARBALL_URL:-https://download.sourcemage.org/image/official/test/smgl-test-0.63-20251212_1200-basesystem-x86_64.tar.xz}"
+# download.sourcemage.org only redirects to a mirror over plain http, so the default points at that mirror's https side.
+# The sha512 is pinned (taken from a copy whose .sig verified against Source Mage developer key
+# 4746AECF3E0B39BEF7C212ED478240C4FA5A74CE, shipped in sorcery-pubkeys): a compromised mirror cannot swap the tarball. A custom TARBALL_URL without TARBALL_SHA512 falls back to the published .sha512.
+TARBALL_DEFAULT=https://mirror.sobukus.de/files/sourcemage/image/official/test/smgl-test-0.63-20251212_1200-basesystem-x86_64.tar.xz
+TARBALL_URL="${TARBALL_URL:-$TARBALL_DEFAULT}"
+if [[ "$TARBALL_URL" == "$TARBALL_DEFAULT" ]]; then
+  TARBALL_SHA512="${TARBALL_SHA512:-579b164e393f0bb4ea2541d5818eaf75208e523fd954386b195bf0eb02cdc77c1bd486208ff707a3b05758d6e526e639870aaf6fd71405907b2b01ae2a8934b6}"
+fi
+TARBALL_SHA512="${TARBALL_SHA512:-}"
+CURL=(curl -fL --proto "=https" --proto-redir "=https" --retry 3)    # https only, also after redirects
 MNT=/mnt/sourcemage
 SELF_DIR="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 TB="${TARBALL_URL##*/}"
@@ -80,7 +90,9 @@ TB="${TARBALL_URL##*/}"
 # Spell names below were checked against the grimoire inside the base tarball
 # (codex "test", 2025-12-12). The chroot phase re-checks them and skips (with a
 # warning) any that no longer exist.
-SPELLS_CORE=(linux grub2 efibootmgr dhcpcd openssh sudo curl git)   # curl (with TLS) then git: git sources (dzen2) and nvim plugins need https
+# elfutils: the linux spell only depends on it when the kernel config (not restored yet at dependency time) has
+# UNWINDER_ORC, so it is never pulled in, and objtool then fails on a missing gelf.h. Cast it first.
+SPELLS_CORE=(elfutils linux grub2 efibootmgr dhcpcd openssh sudo curl git)   # curl (with TLS) then git: git sources (dzen2) and nvim plugins need https
 SPELLS_VM=()
 SPELLS_MAC=(linux-firmware microcode_ctl alsa-utils broadcom-wl wpa_supplicant)   # broadcom-wl: local grimoire, see grimoire/
 # bspwm rice, same stack as legenddots/bspwm (the grimoire has dzen2, not lemonbar; Dillo instead of surf) + neovim + fastfetch.
@@ -177,17 +189,17 @@ do_fresh() {
 
   header "Downloading base system ${TB}"
   if [[ "$DRY_RUN" == 1 ]]; then
-    echo "[dry-run] curl -fL# -O $TARBALL_URL  (+ .sha512 verify)"
+    echo "[dry-run] ${CURL[*]} -# -O $TARBALL_URL  (+ sha512 verify)"
   else
-    ( cd "$MNT" && curl -fL# -O "$TARBALL_URL" )
+    ( cd "$MNT" && "${CURL[@]}" -# -O "$TARBALL_URL" ) || die "download failed: $TARBALL_URL"
     if [[ "$VERIFY" == "true" ]]; then
       header "Verifying sha512"
-      if ( cd "$MNT" && curl -fLs -O "${TARBALL_URL}.sha512" ); then
-        ( cd "$MNT" && sha512sum -c "${TB}.sha512" ) || die "checksum mismatch — aborting"
-        rm -f "${MNT:?}/${TB:?}.sha512"
-      else
-        warn "no .sha512 published for this tarball — skipping verification"
+      if [[ -z "$TARBALL_SHA512" ]]; then
+        warn "no pinned TARBALL_SHA512 for a custom TARBALL_URL — using the mirror's own .sha512 (catches corruption, not tampering)"
+        TARBALL_SHA512=$("${CURL[@]}" -s "${TARBALL_URL}.sha512" | awk 'NR==1 {print $1}') || true
+        [[ -n "$TARBALL_SHA512" ]] || die "no .sha512 for $TARBALL_URL — set TARBALL_SHA512=... or VERIFY=false"
       fi
+      echo "$TARBALL_SHA512  $MNT/$TB" | sha512sum -c - || { rm -f "${MNT:?}/${TB:?}"; die "sha512 mismatch — tarball deleted, aborting"; }
     fi
   fi
   header "Unpacking into ${MNT}"
@@ -257,8 +269,15 @@ install_local_grimoire() {
   else
     local off; off=$(find "$MNT/var/lib/sorcery/codex" -mindepth 1 -maxdepth 1 -type d ! -name local | head -1)
     if [[ -n "$off" ]]; then
-      for f in "$off"/*; do [[ -f "$f" && "$f" != *.index ]] && ln -sfn "../$(basename "$off")/$(basename "$f")" "$MNT/var/lib/sorcery/codex/local/$(basename "$f")"; done
+      for f in "$off"/*; do
+        [[ -f "$f" && "$f" != *.index && "${f##*/}" != GRIMOIRE ]] || continue
+        ln -sfn "../$(basename "$off")/$(basename "$f")" "$MNT/var/lib/sorcery/codex/local/$(basename "$f")"
+      done
     fi
+    # Its own metadata, marked local: a symlinked GRIMOIRE would carry the official FROM_URL, and `scribe update`
+    # would then download the official grimoire over this one (losing every local fix).
+    rm -f "$MNT/var/lib/sorcery/codex/local/GRIMOIRE"
+    echo 'CODEX_IS_LOCAL=yes' > "$MNT/var/lib/sorcery/codex/local/GRIMOIRE"
   fi
   if [[ "$DRY_RUN" == 1 ]]; then
     echo "[dry-run] append GRIMOIRE_DIR[1]=/var/lib/sorcery/codex/local to $MNT/etc/sorcery/local/grimoire"
@@ -457,7 +476,7 @@ done
 # desktop cast fails. The linux spell opens a kernel config menu — see the
 # README for the options this machine needs built IN (no initramfs).
 echo "── Casting: \${CAST[*]}"
-for s in linux grub2 efibootmgr curl git mesa libxcursor xcb-util-cursor libxscrnsaver libxinerama libnotify libjpeg-turbo giflib libwebp; do
+for s in elfutils linux grub2 efibootmgr curl git mesa libxcursor xcb-util-cursor libxscrnsaver libxinerama libnotify libjpeg-turbo giflib libwebp; do
   COPT=()
   # an earlier BIOS build of grub2 (no EFI modules) must be recompiled, not skipped as "no work to do"
   needs_recast "\$s" && is_installed "\$s" && COPT=(-c)
@@ -469,7 +488,7 @@ grub-install --target=x86_64-efi --efi-directory=/boot/efi --removable || { echo
 grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=SourceMage 2>/dev/null || true
 grub-mkconfig -o /boot/grub/grub.cfg || { echo "warn: grub-mkconfig failed"; FAILED+=("grub-mkconfig"); }
 
-REST=(); for s in "\${CAST[@]}"; do case "\$s" in linux|grub2|efibootmgr|curl|git|mesa|libxcursor|xcb-util-cursor|libxscrnsaver|libxinerama|libnotify|libjpeg-turbo|giflib|libwebp|sudo) ;; *) REST+=("\$s") ;; esac; done
+REST=(); for s in "\${CAST[@]}"; do case "\$s" in elfutils|linux|grub2|efibootmgr|curl|git|mesa|libxcursor|xcb-util-cursor|libxscrnsaver|libxinerama|libnotify|libjpeg-turbo|giflib|libwebp|sudo) ;; *) REST+=("\$s") ;; esac; done
 ((\${#REST[@]})) && { cast "\${REST[@]}" || { echo "warn: some casts failed — re-run: ./install.sh resume"; FAILED+=("cast \${REST[*]}"); }; }
 # sudo asks sorcery for its TEXT-EDITOR provider and gets neovim when neovim is in the same cast list; its build runs
 # a hash check for neovim, so it must come after everything else (otherwise: "hash: neovim: not found")
@@ -478,7 +497,8 @@ for s in sudo; do
 done
 
 echo "── Set the root password"
-if [[ -n "$ROOT_PASSWORD" ]]; then echo "root:$ROOT_PASSWORD" | chpasswd || FAILED+=("passwd root"); else passwd root || FAILED+=("passwd root"); fi
+PWF=/root/.sm-passwords      # written by install.sh (mode 0600), removed after the chroot
+if grep -q '^root:' "\$PWF" 2>/dev/null; then grep '^root:' "\$PWF" | chpasswd || FAILED+=("passwd root"); else passwd root || FAILED+=("passwd root"); fi
 if [[ "$INSTALL_DESKTOP" == true ]] && command -v slock >/dev/null; then chmod u+s "\$(command -v slock)"; fi
 # No logind here, so a normal user cannot open the DRM/VT devices: make Xorg setuid (it drops privileges after opening them)
 if [[ "$INSTALL_DESKTOP" == true && -x /usr/bin/Xorg ]]; then chmod u+s /usr/bin/Xorg; fi
@@ -491,17 +511,26 @@ if [[ -n "$USER_NAME" ]]; then
     cp -rn /etc/skel/. "/home/$USER_NAME/" && chown -R "$USER_NAME:\$(id -gn "$USER_NAME")" "/home/$USER_NAME"
   fi
   echo "── Set the password for $USER_NAME"
-  if [[ -n "$USER_PASSWORD" ]]; then echo "$USER_NAME:$USER_PASSWORD" | chpasswd || FAILED+=("passwd $USER_NAME"); else passwd "$USER_NAME" || FAILED+=("passwd $USER_NAME"); fi
+  if grep -q '^$USER_NAME:' "\$PWF" 2>/dev/null; then grep '^$USER_NAME:' "\$PWF" | chpasswd || FAILED+=("passwd $USER_NAME"); else passwd "$USER_NAME" || FAILED+=("passwd $USER_NAME"); fi
 fi
 if ((\${#FAILED[@]})); then echo "FAILED STEPS: \${FAILED[*]}"; exit 1; fi
 CHROOT_END
 run chmod +x "$MNT/root/sm-chroot.sh"
+# Passwords go to the chroot in a root-only file, never into sm-chroot.sh (which dry-run prints) or a command line.
+if [[ "$DRY_RUN" == 1 ]]; then echo "[dry-run] write $MNT/root/.sm-passwords (0600, not shown)"
+elif [[ -n "$ROOT_PASSWORD" || ( -n "$USER_NAME" && -n "$USER_PASSWORD" ) ]]; then
+  ( umask 077
+    { [[ -n "$ROOT_PASSWORD" ]] && printf 'root:%s\n' "$ROOT_PASSWORD"
+      [[ -n "$USER_NAME" && -n "$USER_PASSWORD" ]] && printf '%s:%s\n' "$USER_NAME" "$USER_PASSWORD"
+      true; } > "$MNT/root/.sm-passwords" )
+fi
 
 header "Entering chroot to configure & build (this compiles from source)"
 CHROOT_RC=0
 CHROOT_IN=/dev/stdin; [[ "$UNATTENDED" == 1 ]] && CHROOT_IN=/dev/null   # EOF on stdin = every prompt takes its default
 run env -i HOME=/root TERM="${TERM:-linux}" PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
     chroot "$MNT" /bin/bash /root/sm-chroot.sh < "$CHROOT_IN" || CHROOT_RC=$?
+[[ -f "$MNT/root/.sm-passwords" ]] && { shred -u "$MNT/root/.sm-passwords" 2>/dev/null || rm -f "$MNT/root/.sm-passwords"; }
 run rm -f "${MNT:?}/root/sm-chroot.sh" "${MNT:?}/root/ca-bundle.pem" "${MNT:?}/root/.wgetrc" "${MNT:?}/root/.gitconfig"
 
 header "Cleaning up"
