@@ -428,6 +428,12 @@ GRUB2_OPTS="--disable-mm-debug --disable-efiemu"
 GRUB2_PLATFORM="x86_64-efi"
 GRUB2_RELEASE="stable"
 GP_END
+# neovim wants the LuaJIT 2.1 snapshot (lazy.nvim does not run on PUC Lua). The stock luajit would default to the
+# stable 2.0.5 and then conflict with neovim's SNAPSHOT sub-dependency, so pre-select the branch (the local grimoire's
+# luajit spell clones it from GitHub; repo.or.cz answers scripted clients with a bot check).
+cat > /etc/sorcery/local/depends/luajit.p <<LJ_END
+LUAJIT_BRANCH="snapshot"
+LJ_END
 # curl's SSL provider defaults to "none" (--without-ssl): no https for curl or (through it) git. Use openssl.
 touch /etc/sorcery/local/depends/curl.p
 if grep -q '^CURL_SSL=' /etc/sorcery/local/depends/curl.p; then sed -i 's/^CURL_SSL=.*/CURL_SSL="openssl"/' /etc/sorcery/local/depends/curl.p
