@@ -16,14 +16,170 @@ through where they agree and where they differ, and what that means for this ins
   GNU/Linux team kept developing after Sallee took his project offline and relicensed it, and
   at his request renamed theirs Source Mage. Source Mage notes that Sorcerer started around
   2000, about the same time as Gentoo, and that the two never had anything to do with each
-  other *(SM)*. Its aim is to stay close to upstream: a spell
-  downloads the source from the upstream project's own site, and only minimal patches are applied.
-  Core tools need only bash, sed and an awk, with no Perl or Python.
+  other *(SM)*. Its goals are covered under [Philosophy](#philosophy).
 - **Gentoo** is the largest of the three, with one big main tree and Portage, written in Python.
-  It favours configuration up front (USE flags, profiles) and offers official binary packages too.
+  It offers official binary packages too.
 - **Exherbo** was started by former Gentoo developers. It keeps the ebuild-like shape but splits
   the package tree into many small repositories, with a small core team. Its package manager is
   Paludis (C++), and it treats source and binary packages on equal terms.
+
+## Philosophy
+
+Each project's view in its own words, quoted from its own pages:
+Gentoo's [philosophy](https://www.gentoo.org/get-started/philosophy/), [Social Contract](https://www.gentoo.org/get-started/philosophy/social-contract.html), [About](https://www.gentoo.org/get-started/about/) and [Council](https://wiki.gentoo.org/wiki/Project:Council) pages;
+Exherbo's [homepage](https://exherbo.org/) and [expectations](https://exherbo.org/docs/expectations.html); Source Mage's [Intro](https://sourcemage.org/Intro),
+[Social Contract](https://sourcemage.org/Social%20Contract), [History](https://sourcemage.org/History) and [Comparison with Gentoo](https://sourcemage.org/Comparison%20with%20Gentoo).
+
+### Core goal and target user
+
+- **Source Mage** is "founded on the principle of returning control back to System
+  Administrators", and is aimed at "System administrators, power-users and others who really want
+  control over their systems and want to understand better how 'things' work" ([Intro](https://sourcemage.org/Intro)).
+  It calls itself "the distribution for LFS users who are willing to let a package manager at
+  least automate the 'download and `./configure && make && make install`' part of the process,
+  but not willing to lose any other control" ([Comparison](https://sourcemage.org/Comparison%20with%20Gentoo)).
+- **Gentoo**: "Every user has work they need to do. The goal of Gentoo is to design tools and
+  systems that allow a user to do that work as pleasantly and efficiently as possible, as they see
+  fit." Daniel Robbins' summary: "The tool serves the user rather than the user serving the
+  tool" ([philosophy](https://www.gentoo.org/get-started/philosophy/)). Its near-unlimited adaptability is why "we call Gentoo a
+  metadistribution" ([About](https://www.gentoo.org/get-started/about/)).
+- **Exherbo** "aims to be a stable and flexible distribution for developers, tinkerers and people
+  who need their distribution to help them be productive", and states "The target users know what
+  they are doing" ([homepage](https://exherbo.org/)).
+
+### User control and defaults
+
+- **Source Mage**: "You are the administrator and you know how best to deploy and configure
+  software. We handle the installation." Packages stay "as close to upstream vendor's vision as
+  possible" ([Intro](https://sourcemage.org/Intro)). Its stated goal is "a 100% free source-based GNU/Linux distro that
+  allows users the maximum amount of freedom and choice possible" ([History](https://sourcemage.org/History)).
+- **Gentoo**: "If the tool forces the user to do things a particular way, then the tool is
+  working against, rather than for, the user" ([philosophy](https://www.gentoo.org/get-started/philosophy/)). Source Mage describes
+  Gentoo's approach as "sensible defaults" ([Comparison](https://sourcemage.org/Comparison%20with%20Gentoo)); see
+  [Defaults and patching](#defaults-and-patching).
+- **Exherbo**: "Flexibility where it makes sense to provide flexibility", and "All design goals
+  must be phrased in such a way that it is hard to use them as slogans to justify stupidity"
+  ([homepage](https://exherbo.org/)).
+
+### Interactivity vs up-front configuration
+
+- **Source Mage** asks: "The default behaviour is to ask the admin during install what their
+  choice is for every option a package supports, then store the answer" ([Comparison](https://sourcemage.org/Comparison%20with%20Gentoo)).
+- **Gentoo** keeps out of the way: a good tool "does not interfere and make its presence known,
+  nor does it force you to interact with it when you don't want it to" ([philosophy](https://www.gentoo.org/get-started/philosophy/)).
+  Its settings are global with per-package overrides ([Comparison](https://sourcemage.org/Comparison%20with%20Gentoo)).
+- **Exherbo** rules interactivity out: "No interactivity requirement. Controllable, repeatable
+  behaviour with up-front configuration" ([homepage](https://exherbo.org/)).
+
+### Upstream and patching
+
+- **Source Mage** promises to "feed back bug-fixes, improvements, user requests, etc. to the
+  'upstream' authors" ([Social Contract](https://sourcemage.org/Social%20Contract)) and patches only with the user's consent, the
+  default answer being "no" ([Comparison](https://sourcemage.org/Comparison%20with%20Gentoo)).
+- **Gentoo** will "submit bug-fixes, improvements, user requests, etc. to the 'upstream' authors"
+  and "clearly document our contributions to Gentoo as well as any improvements or changes we make
+  to external sources used by Gentoo (whether in the form of patches, 'sed tweaks' or some other
+  form)" ([Social Contract](https://www.gentoo.org/get-started/philosophy/social-contract.html)).
+- **Exherbo** "Uses a couple of bits of code, and some ideas, from other open source projects,
+  but the majority of code is original, not forked" ([homepage](https://exherbo.org/)).
+
+### Centralisation
+
+- **Exherbo**: "No over-centralisation. Only widely used packages are to be in main repositories,
+  and make the tools good enough to deal with lots of small third party repositories"
+  ([homepage](https://exherbo.org/)).
+- **Gentoo** syncs one main ebuild repository, with "more than 19,000 unique packages"
+  ([About](https://www.gentoo.org/get-started/about/)).
+- **Source Mage** supports several package trees side by side "by default", which it calls
+  "arguably much more straightforward" than Gentoo's overlays ([Comparison](https://sourcemage.org/Comparison%20with%20Gentoo)).
+
+### Stability vs freedom to break things
+
+- **Exherbo**: "We need the freedom to break things when necessary", because "Some of our ideas
+  differ greatly from other distributions and it's much easier if we don't have to fight legacy
+  code and ideas"; also "Be able to deliver features that other distributions consider too
+  ambitious" ([homepage](https://exherbo.org/)).
+- **Source Mage** releases the stable grimoire "QA tested as a unit" and keeps older stable trees
+  installable alongside ([Comparison](https://sourcemage.org/Comparison%20with%20Gentoo)).
+- **Gentoo** keeps several versions in one tree and masks those not expected to update cleanly
+  (as described in [Comparison](https://sourcemage.org/Comparison%20with%20Gentoo)).
+
+### Free software and licensing
+
+- **Source Mage**: "Source Mage will remain 100% free"; its own software is GPL, included
+  software GPL-compatible, docs under the GFDL, and "we will never make the core system depend on
+  an item of non-free software". But "We will not limit user choice to our free software
+  standards": each spell's `LICENSE` field and the sorcery spell filter let users decide
+  ([Social Contract](https://sourcemage.org/Social%20Contract)). Non-free packages live in the unofficial "z-rejected" grimoire
+  ([Intro](https://sourcemage.org/Intro)).
+- **Gentoo**: "Gentoo is and will remain free software", released under GPL-2 or later or
+  CC-BY-SA 2.0 or later, and "Gentoo will never depend upon a piece of software or metadata"
+  that doesn't fulfil the Free Software Definition or the Definition of Free Cultural Works. It
+  also requires that "the operating system should be able to build itself from scratch"
+  ([Social Contract](https://www.gentoo.org/get-started/philosophy/social-contract.html)).
+- **Exherbo**: no licensing statement on the pages fetched.
+
+### Transparency
+
+- **Gentoo**: "We will not hide problems"; the bug database is open "at all times", with
+  exceptions for security embargoes, community relations, or the Council's discretion
+  ([Social Contract](https://www.gentoo.org/get-started/philosophy/social-contract.html)).
+- **Source Mage**: "We will keep our entire bug-report database open for public view at all
+  times" ([Social Contract](https://sourcemage.org/Social%20Contract)). Both contracts say they are derived from Debian's.
+
+### Governance
+
+- **Gentoo**: "The elected Gentoo Council decides on global issues and policies that affect
+  multiple projects in Gentoo." Members "are elected for a year and must hold monthly public
+  meetings", the Council hears appeals, and the structure "was created via GLEP 39"
+  ([Council](https://wiki.gentoo.org/wiki/Project:Council)). The About page puts it at 7 members and "around 250 developers"
+  ([About](https://www.gentoo.org/get-started/about/)).
+- **Source Mage** and **Exherbo**: no governance page found. Source Mage's History notes the
+  project name was chosen "after a vote" ([History](https://sourcemage.org/History)).
+
+### Contribution model
+
+- **Exherbo**: "For developers - we expect users to take part in the development", and "using
+  Exherbo is an active commitment. We fully expect you to help with development or other parts
+  of the project" ([expectations](https://exherbo.org/docs/expectations.html)). In its first year, contributions came "from over 70
+  different people" ([homepage](https://exherbo.org/)).
+- **Source Mage**: "Working on this project is about FUN!", and if things aren't happening fast
+  enough "by all means you are welcome to join in" ([Social Contract](https://sourcemage.org/Social%20Contract)). Patches are guided
+  "through peer review and compliance with our core principles and policies" ([Intro](https://sourcemage.org/Intro)),
+  and "we typically will let anyone who can write a patch and wants to try their hand become a
+  developer" ([Comparison](https://sourcemage.org/Comparison%20with%20Gentoo)).
+- **Gentoo**: comments on the Social Contract go to the gentoo-dev mailing list
+  ([Social Contract](https://www.gentoo.org/get-started/philosophy/social-contract.html)).
+
+See also [Community](#community) for how each describes its users and channels.
+
+### Honesty about weaknesses
+
+- **Source Mage** has a "Where Gentoo wins" list: binary packages, number of packages,
+  architectures and docs ("we hurt a lot here") ([Comparison](https://sourcemage.org/Comparison%20with%20Gentoo)).
+- **Exherbo** warns "Exherbo is not a system where we document everything so you'll need a basic
+  understanding of how Linux systems work" ([expectations](https://exherbo.org/docs/expectations.html)).
+- **Gentoo**: no such list on the pages fetched, though "We will not hide problems" is in its
+  Social Contract.
+
+### Summary
+
+| | Source Mage | Gentoo | Exherbo |
+|---|---|---|---|
+| Core idea | control back to the administrator | the tool serves the user | productive tools for developers |
+| Target user | sysadmins, power users | anyone, any use (metadistribution) | users who know what they're doing |
+| Choosing features | asked per package, remembered | global settings, per-package overrides | up front, no interactivity |
+| Upstream | upstream defaults, patches opt-in | patches documented, fixes sent upstream | mostly original code |
+| Repositories | several trees side by side | one main repository | many small repositories |
+| Stability | QA'd stable grimoire releases | masks within one tree | freedom to break things |
+| Free software | 100% free core, non-free allowed separately | free software, self-hosting | no statement found |
+| Governance | no page found | elected 7-member Council | no page found |
+| Contributing | anyone who writes patches | mailing lists, developers | expected of every user |
+
+**For this installer:** Source Mage's ask-every-time model is the opposite of Exherbo's "No
+interactivity requirement". `install.sh` bridges the two by pre-seeding answers under
+`/etc/sorcery/local/depends/` and, with `UNATTENDED=1`, taking defaults for everything else.
+That gives a repeatable, up-front install while keeping Source Mage's upstream-default spells.
 
 ## What's similar
 
