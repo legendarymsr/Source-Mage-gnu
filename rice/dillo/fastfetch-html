@@ -137,7 +137,7 @@ def main():
 <title>fastfetch - %(host)s</title>
 <style type="text/css">
 body     { background-color: %(page)s; color: %(fg)s; margin: 20px 30px; font-family: "JetBrains Mono", monospace; }
-pre.term { background-color: %(box)s; color: %(fg)s; border: 1px solid #2f334d; padding: 12px 16px; margin: 0 0 14px 0; font-size: 13px; }
+pre.term { background-color: %(box)s; color: %(fg)s; border: 1px solid #2f334d; padding: 12px 16px; margin: 0 0 14px 0; font-size: 11px; }
 a        { color: #7aa2f7; }
 </style>
 </head>

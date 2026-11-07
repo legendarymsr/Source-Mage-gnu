@@ -3,7 +3,7 @@
 #
 #   nvim-html [file-to-open] [output.html]     default: ~/.config/nvim/init.lua -> ~/www/nvim.html
 #   NVIM_KEYS=' e'  nvim-html                  keys typed after start-up (default: leader+e = file tree)
-#   NVIM_COLS=110 NVIM_ROWS=30                  size of the screen
+#   NVIM_COLS=84 NVIM_ROWS=30                  size of the screen
 #
 # Dillo has no JavaScript, so an interactive neovim cannot live in a page. What this does instead is honest: it starts
 # your actual nvim (your init.lua, your plugins, your colour scheme) in a pseudo-terminal, lets it draw its screen,
@@ -16,7 +16,7 @@ HOME = os.path.expanduser("~")
 FILE = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HOME, ".config", "nvim", "init.lua")
 OUT = sys.argv[2] if len(sys.argv) > 2 else os.path.join(HOME, "www", "nvim.html")
 KEYS = os.environ.get("NVIM_KEYS", " e").encode().decode("unicode_escape")   # \r etc. allowed
-COLS, ROWS = int(os.environ.get("NVIM_COLS", 110)), int(os.environ.get("NVIM_ROWS", 30))
+COLS, ROWS = int(os.environ.get("NVIM_COLS", 84)), int(os.environ.get("NVIM_ROWS", 30))
 SETTLE_S, MAX_S = 4.0, 150                      # nvim is "ready" after SETTLE_S of silence (slow machines: MAX_S)
 
 # st's Tokyo Night palette for the 16 base colours (same table as fastfetch-html)
@@ -274,17 +274,20 @@ def main():
 <title>nvim - %(host)s</title>
 <style type="text/css">
 body     { background-color: %(page)s; color: %(fg)s; margin: 20px 30px; font-family: "JetBrains Mono", monospace; }
-pre.term { background-color: %(bg)s; color: %(fg)s; border: 1px solid #2f334d; padding: 12px 16px; margin: 0 0 14px 0; font-size: 13px; }
+pre.term { background-color: %(bg)s; color: %(fg)s; border: 1px solid #2f334d; padding: 12px 16px; margin: 0 0 14px 0; font-size: 11px; }
 a        { color: #7aa2f7; }
 .note    { color: #565f89; font-size: 12px; }
 </style>
 </head>
 <body>
-<pre class="term">%(screen)s</pre>
+<pre class="term">%(prompt)s nvim %(path)s
+%(screen)s</pre>
 <p class="note">neovim %(file)s &middot; a snapshot of the real nvim (your init.lua and plugins) drawn into a pseudo-terminal; Dillo cannot run an interactive one &middot; <a href="/">back</a></p>
 </body>
 </html>
-""" % dict(host=html.escape(host), page=PAGE, fg=FG, bg=BG, screen=scr.html(), file=html.escape(os.path.basename(FILE)))
+""" % dict(host=html.escape(host), page=PAGE, fg=FG, bg=BG, screen=scr.html(), file=html.escape(os.path.basename(FILE)),
+           prompt=html.escape("%s@%s:~$" % (os.environ.get("USER") or os.path.basename(HOME), host)),
+           path=html.escape(FILE.replace(HOME, "~", 1) if FILE.startswith(HOME + "/") else FILE))
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w") as f:
         f.write(page)
