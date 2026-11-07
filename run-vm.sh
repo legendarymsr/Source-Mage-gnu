@@ -48,6 +48,10 @@ ISO_DEFAULT="${ISO_DEFAULT:-$HOME/live.iso}"
 # Gentoo minimal install ISO (UEFI-bootable; has sgdisk, mkfs, curl, chroot).
 # Dated autobuilds rotate off the mirror — if this 404s, pass your own ISO or ISO_URL.
 ISO_URL="${ISO_URL:-https://distfiles.gentoo.org/releases/amd64/autobuilds/20260913T163055Z/install-amd64-minimal-20260913T163055Z.iso}"
+# sha256 of the default ISO, pinned from Gentoo's signed .sha256 (release key 13EBBDBEDE7A12775DFDB1BABB572E0E2D182910, checked).
+# A custom ISO_URL needs its own ISO_SHA256 (or ISO_SHA256=skip).
+if [[ "$ISO_URL" == "https://distfiles.gentoo.org/releases/amd64/autobuilds/20260913T163055Z/install-amd64-minimal-20260913T163055Z.iso" ]]; then ISO_SHA256="${ISO_SHA256:-4f155acdffd6b9ea88c69a06a22fb4db1ca780d37fd11dd370510ec28a3ab546}"; fi
+ISO_SHA256="${ISO_SHA256:-}"
 FW_CODE="${FW_CODE:-}"; FW_VARS="${FW_VARS:-}"
 
 detect_fw() {
@@ -112,7 +116,7 @@ if [[ -z "$DISPLAY_TYPE" ]]; then
   done
 fi
 if [[ -n "$DISPLAY_TYPE" ]]; then DISP=(-vga std -display "$DISPLAY_TYPE")
-else warn "no gtk/sdl display in this qemu — using VNC on localhost:5900"; DISP=(-vga std -display none -vnc :0); fi
+else warn "no gtk/sdl display in this qemu — using VNC on localhost:5900"; DISP=(-vga std -display none -vnc 127.0.0.1:0); fi
 
 ARGS=(
   "${ACCEL[@]}"
@@ -121,7 +125,7 @@ ARGS=(
   -drive "if=pflash,format=raw,readonly=on,file=$FW_CODE"
   -drive "if=pflash,format=raw,file=$NVRAM"
   -drive "file=$DISK,if=virtio,format=qcow2"
-  -netdev "user,id=n0,hostfwd=tcp::${SSH_PORT}-:22" -device virtio-net-pci,netdev=n0
+  -netdev "user,id=n0,hostfwd=tcp:127.0.0.1:${SSH_PORT}-:22" -device virtio-net-pci,netdev=n0
   "${DISP[@]}"
 )
 
@@ -131,7 +135,12 @@ if [[ "$MODE" == install ]]; then
     [[ "$ISO" == "$ISO_DEFAULT" ]] || die "ISO not found: $ISO"
     command -v curl >/dev/null 2>&1 || die "curl not found — needed to fetch the ISO"
     header "No ISO at $ISO — downloading Gentoo minimal"
-    curl -fL# -o "$ISO" "$ISO_URL" || { rm -f "$ISO"; die "ISO download failed ($ISO_URL) — pass your own ISO"; }
+    [[ -n "$ISO_SHA256" ]] || die "no ISO_SHA256 for a custom ISO_URL — set ISO_SHA256=<sha256> (or ISO_SHA256=skip)"
+    curl -fL# --proto "=https" --proto-redir "=https" -o "$ISO.part" "$ISO_URL" || { rm -f "$ISO.part"; die "ISO download failed ($ISO_URL) — pass your own ISO"; }
+    if [[ "$ISO_SHA256" != skip ]]; then
+      echo "$ISO_SHA256  $ISO.part" | sha256sum -c --quiet - || { rm -f "$ISO.part"; die "ISO sha256 mismatch — download deleted"; }
+    fi
+    mv "$ISO.part" "$ISO"
   fi
   pack_installer
   ARGS+=(-cdrom "$ISO" -boot menu=on -drive "file=$INSTALLER_TAR,if=virtio,format=raw,readonly=on")
