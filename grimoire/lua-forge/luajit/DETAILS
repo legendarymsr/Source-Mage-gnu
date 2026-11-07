@@ -2,13 +2,13 @@
 case "${LUAJIT_BRANCH}" in
   snapshot)
 # The grimoire downloads the 2.1 snapshot from repo.or.cz, which answers automated clients with a
-# "making sure you're not a bot" page instead of the tarball. Same commit, cloned over https from GitHub
-# (this local spell overrides it).
-       COMMIT_ID="03c31124cc3b521ef54fe398e110fa55660a5057d"
-         VERSION="2.1.${COMMIT_ID:0:8}"
+# "making sure you're not a bot" page instead of the tarball. The same 2.1 branch, cloned over https from
+# GitHub (this local spell overrides it). A branch, not a commit id: the git handler fetches by ref name.
+         VERSION=2.1
           SOURCE=LuaJIT-$VERSION.tar.bz2
 SOURCE_DIRECTORY="$BUILD_DIRECTORY/luajit-git"
-   SOURCE_URL[0]="git_http://github.com/LuaJIT/LuaJIT.git:luajit-git:${COMMIT_ID}"
+   SOURCE_URL[0]="git_http://github.com/LuaJIT/LuaJIT.git:luajit-git:v2.1"
+  FORCE_DOWNLOAD=on
    SOURCE_IGNORE=volatile
 ;;
   stable)
