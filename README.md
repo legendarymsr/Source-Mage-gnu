@@ -63,6 +63,7 @@ carries the fixes found by actually building it:
 | `picom` | `depends xcb`, which is an unrelated cut-buffer tool that needs (broken) `imake` | dependency removed |
 | `rofi` | `yyparse` prototype error under GCC 15's C23 default | built as `-std=gnu17` |
 | `dunst` | `dunstify` does not compile against libnotify 0.8 | build/install only daemon + `dunstctl` |
+| `picom` (regex) | regex support wants libpcre; the optional dependency turns itself on once `pcre2` is installed, so the build broke on a fresh run | `regex=false` forced |
 | `libnotify` | man pages default on, need `docbook-xsl-ns` (not in the grimoire) | man/docbook forced off |
 | `libvterm` | demo tools fail to link under `slibtool` | `-L.libs` |
 | `st` 0.9.2, `slock` 1.4 | suckless programs are configured at compile time; the grimoire builds stock defaults | your `legenddots` `config.h` is copied in before the build (Tokyo Night palette, 12px border, bar cursor; slock colours). Only change: font `JetBrains Mono` instead of the Nerd Font variant, which the grimoire does not have. Checked against each version's `config.def.h` (same settings); **not built or run yet** |
@@ -87,7 +88,7 @@ into a disk image (natively in a chroot, then finished and booted under QEMU + O
 | cold boot under UEFI: OVMF → GRUB → kernel 7.3.1 → ext4 root on a **virtio** disk → `simpleinit` → runlevel 3 → login on VGA and serial | works |
 | desktop: Xorg, mesa (softpipe+virgl), bspwm, sxhkd, picom, rofi, dunst, st, slock, dzen2, neovim built from source; `startx` as a normal user shows the bspwm desktop with the Tokyo Night bar, `super+Return` opens `st`, neovim 0.11 starts | works (screenshots taken) |
 | **Dillo** (your `dillorc`/`keysrc`) with TLS, PNG, JPEG, GIF and WebP, and **fastfetch** with your config | built; `super+w` opens Dillo tiled next to `st`, `fastfetch` runs in `st` |
-| a from-scratch run of the *final* `install.sh` start to finish | **not done**: the install was assembled over several resumed runs while fixing the issues above, and the last fixes (kernel config via `CONFIG_RESTORE`, extra X libraries, `xauth`) were applied by hand and then folded into the script. Expect to hit one more rough edge |
+| a from-scratch run of `install.sh` | **done**: one `fresh` run plus one `resume` built and booted the whole desktop. The fresh run exposed two more bugs, fixed afterwards and covered by the resume: `sudo` must be built after `neovim` (it asks for its editor provider and gets neovim), and `picom` regex. `slock` and `st` with your configs were run: the lock screen shows `#1a1b26`/`#7aa2f7` and unlocks with the password |
 | `broadcom-wl` cast, MacBook hardware, rofi/neovim plugins over the network | not tested |
 
 Boot details worth knowing (all handled by `install.sh`):

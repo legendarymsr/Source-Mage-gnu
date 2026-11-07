@@ -10,7 +10,9 @@ depends libxfixes             &&
 depends xcb-util-renderutil   &&
 depends xcb-util-image        &&
 depends pixman                &&
-depends libev                 &&
+# regex support wants the old PCRE (libpcre), which the grimoire does not offer (it lists pcre2): force it off.
+# It used to be off only by accident, until pcre2 happened to be installed first.
+depends libev "regex=false"   &&
 depends uthash                &&
 
 optional_depends dbus                                         \
@@ -26,12 +28,4 @@ optional_depends libconfig                                    \
 optional_depends OPENGL                                       \
                  'opengl=true'                                \
                  'opengl=false'                               \
-                 'Enable features that require OpenGL?'       &&
-
-optional_depends pcre2                                        \
-                 'regex=true'                                 \
-                 'regex=false'                                \
-                 'Enable regex support in window conditions?'
-
-
-
+                 'Enable features that require OpenGL?'

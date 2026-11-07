@@ -468,8 +468,13 @@ grub-install --target=x86_64-efi --efi-directory=/boot/efi --removable || { echo
 grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=SourceMage 2>/dev/null || true
 grub-mkconfig -o /boot/grub/grub.cfg || { echo "warn: grub-mkconfig failed"; FAILED+=("grub-mkconfig"); }
 
-REST=(); for s in "\${CAST[@]}"; do case "\$s" in linux|grub2|efibootmgr|curl|git|mesa|libxcursor|xcb-util-cursor|libxscrnsaver|libxinerama|libnotify|libjpeg-turbo|giflib|libwebp) ;; *) REST+=("\$s") ;; esac; done
+REST=(); for s in "\${CAST[@]}"; do case "\$s" in linux|grub2|efibootmgr|curl|git|mesa|libxcursor|xcb-util-cursor|libxscrnsaver|libxinerama|libnotify|libjpeg-turbo|giflib|libwebp|sudo) ;; *) REST+=("\$s") ;; esac; done
 ((\${#REST[@]})) && { cast "\${REST[@]}" || { echo "warn: some casts failed — re-run: ./install.sh resume"; FAILED+=("cast \${REST[*]}"); }; }
+# sudo asks sorcery for its TEXT-EDITOR provider and gets neovim when neovim is in the same cast list; its build runs
+# a hash check for neovim, so it must come after everything else (otherwise: "hash: neovim: not found")
+for s in sudo; do
+  [[ " \${CAST[*]} " == *" \$s "* ]] && { cast "\$s" || { echo "warn: cast \$s failed (re-run ./install.sh resume)"; FAILED+=("cast \$s"); }; }
+done
 
 echo "── Set the root password"
 if [[ -n "$ROOT_PASSWORD" ]]; then echo "root:$ROOT_PASSWORD" | chpasswd || FAILED+=("passwd root"); else passwd root || FAILED+=("passwd root"); fi

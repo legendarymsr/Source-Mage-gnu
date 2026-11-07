@@ -3,3 +3,4 @@
 
 2026-11-06 legendarymsr
 	* DEPENDS: drop "depends xcb" (that is the unrelated X cut-buffer tool, which needs imake and fails to build); libxcb and the xcb-util spells are already listed
+	* DEPENDS: force regex=false (needs libpcre, not pcre2; broke as soon as pcre2 was installed)
