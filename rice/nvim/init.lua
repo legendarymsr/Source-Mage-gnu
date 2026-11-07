@@ -70,7 +70,7 @@ lazy.setup({
   {
     "nvim-tree/nvim-tree.lua",
     keys = { { "<leader>e", "<cmd>NvimTreeToggle<CR>", desc = "File tree" } },
-    opts = { renderer = { icons = { show = { file = false, folder = false, folder_arrow = true, git = false } } } },
+    opts = { renderer = { icons = { show = { file = false, folder = false, folder_arrow = false, git = false } } } },
   },
 
   -- syntax highlighting
@@ -82,7 +82,8 @@ lazy.setup({
       local ok, configs = pcall(require, "nvim-treesitter.configs")
       if not ok then return end      -- never break startup over a parser problem
       configs.setup({
-        ensure_installed = { "lua", "bash", "c", "vim", "vimdoc", "markdown", "json", "toml", "yaml" },
+        -- NVIM_NO_TS_INSTALL=1 (set by nvim-html) skips the parser downloads
+        ensure_installed = vim.env.NVIM_NO_TS_INSTALL and {} or { "lua", "bash", "c", "vim", "vimdoc", "markdown", "json", "toml", "yaml" },
         highlight = { enable = true },
       })
     end,

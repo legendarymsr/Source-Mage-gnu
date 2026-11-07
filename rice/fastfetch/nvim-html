@@ -1,0 +1,297 @@
+#!/usr/bin/env python3
+# ~/.config/fastfetch/nvim-html — a snapshot of the REAL neovim, as a page for Dillo.
+#
+#   nvim-html [file-to-open] [output.html]     default: ~/.config/nvim/init.lua -> ~/www/nvim.html
+#   NVIM_KEYS=' e'  nvim-html                  keys typed after start-up (default: leader+e = file tree)
+#   NVIM_COLS=110 NVIM_ROWS=30                  size of the screen
+#
+# Dillo has no JavaScript, so an interactive neovim cannot live in a page. What this does instead is honest: it starts
+# your actual nvim (your init.lua, your plugins, your colour scheme) in a pseudo-terminal, lets it draw its screen,
+# reads that screen back with a small terminal emulator (cursor addressing, colours, erase) and writes it out as HTML
+# in the same Tokyo Night box as the fastfetch page. Standard library only. Needs nvim in PATH.
+
+import fcntl, html, os, pty, re, select, signal, struct, subprocess, sys, termios, time
+
+HOME = os.path.expanduser("~")
+FILE = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HOME, ".config", "nvim", "init.lua")
+OUT = sys.argv[2] if len(sys.argv) > 2 else os.path.join(HOME, "www", "nvim.html")
+KEYS = os.environ.get("NVIM_KEYS", " e").encode().decode("unicode_escape")   # \r etc. allowed
+COLS, ROWS = int(os.environ.get("NVIM_COLS", 110)), int(os.environ.get("NVIM_ROWS", 30))
+SETTLE_S, MAX_S = 4.0, 150                      # nvim is "ready" after SETTLE_S of silence (slow machines: MAX_S)
+
+# st's Tokyo Night palette for the 16 base colours (same table as fastfetch-html)
+BASE16 = ["#15161e", "#f7768e", "#9ece6a", "#e0af68", "#7aa2f7", "#bb9af7", "#7dcfff", "#a9b1d6",
+          "#414868", "#f7768e", "#9ece6a", "#e0af68", "#7aa2f7", "#bb9af7", "#7dcfff", "#c0caf5"]
+FG, BG, PAGE = "#c0caf5", "#1a1b26", "#16161e"
+
+
+def xterm256(n):
+    if n < 16:
+        return BASE16[n]
+    if n < 232:
+        n -= 16
+        lv = [0, 95, 135, 175, 215, 255]
+        return "#%02x%02x%02x" % (lv[n // 36], lv[(n // 6) % 6], lv[n % 6])
+    g = 8 + (n - 232) * 10
+    return "#%02x%02x%02x" % (g, g, g)
+
+
+class Screen:
+    """Just enough of a terminal for nvim's TUI: CUP/CUU/CUD/CUF/CUB/CHA/VPA, ED/EL/ECH, ICH/DCH/IL/DL, SU/SD with
+    a scroll region, REP, SGR (16/256/truecolour, bold, italic, underline, reverse). Everything else is ignored."""
+
+    def __init__(self, rows, cols):
+        self.rows, self.cols = rows, cols
+        self.blank = (" ", None, None, 0)
+        self.grid = [[self.blank] * cols for _ in range(rows)]
+        self.r = self.c = 0
+        self.top, self.bot = 0, rows - 1
+        self.fg = self.bg = None
+        self.attr = 0                              # bit 1 bold, 2 italic, 4 underline, 8 reverse
+        self.last = " "
+        self.buf = ""
+
+    def cell(self, ch):
+        return (ch, self.fg, self.bg, self.attr)
+
+    def put(self, ch):
+        if self.c >= self.cols:
+            self.c = self.cols - 1                 # nvim never relies on auto-wrap
+        self.grid[self.r][self.c] = self.cell(ch)
+        self.c += 1
+        self.last = ch
+
+    def scroll(self, n):                           # n > 0: content moves up (SU), n < 0: down (SD)
+        for _ in range(abs(n)):
+            if n > 0:
+                del self.grid[self.top]
+                self.grid.insert(self.bot, [self.cell(" ")] * self.cols)
+            else:
+                del self.grid[self.bot]
+                self.grid.insert(self.top, [self.cell(" ")] * self.cols)
+
+    def linefeed(self):
+        if self.r == self.bot:
+            self.scroll(1)
+        else:
+            self.r = min(self.rows - 1, self.r + 1)
+
+    def sgr(self, nums):
+        k = 0
+        nums = nums or [0]
+        while k < len(nums):
+            v = nums[k]
+            if v == 0: self.fg = self.bg = None; self.attr = 0
+            elif v == 1: self.attr |= 1
+            elif v == 3: self.attr |= 2
+            elif v == 4: self.attr |= 4
+            elif v == 7: self.attr |= 8
+            elif v == 22: self.attr &= ~1
+            elif v == 23: self.attr &= ~2
+            elif v == 24: self.attr &= ~4
+            elif v == 27: self.attr &= ~8
+            elif 30 <= v <= 37: self.fg = BASE16[v - 30]
+            elif 90 <= v <= 97: self.fg = BASE16[v - 90 + 8]
+            elif v == 39: self.fg = None
+            elif 40 <= v <= 47: self.bg = BASE16[v - 40]
+            elif 100 <= v <= 107: self.bg = BASE16[v - 100 + 8]
+            elif v == 49: self.bg = None
+            elif v in (38, 48) and k + 1 < len(nums):
+                col = None
+                if nums[k + 1] == 2 and k + 4 < len(nums):
+                    col = "#%02x%02x%02x" % tuple(min(255, x) for x in nums[k + 2:k + 5]); k += 4
+                elif nums[k + 1] == 5 and k + 2 < len(nums):
+                    col = xterm256(nums[k + 2]); k += 2
+                k += 1
+                if v == 38: self.fg = col
+                else: self.bg = col
+            k += 1
+
+    def csi(self, params, inter, final):
+        private = params[:1] in ("?", ">", "<", "=")
+        if private or inter:
+            return
+        nums = [int(x) if x.isdigit() else 0 for x in re.split(r"[;:]", params)] if params else []
+        n1 = nums[0] if nums and nums[0] > 0 else 1
+        if final == "m": self.sgr(nums)
+        elif final in "Hf":
+            self.r = min(self.rows - 1, max(0, (nums[0] if nums and nums[0] else 1) - 1))
+            self.c = min(self.cols - 1, max(0, (nums[1] if len(nums) > 1 and nums[1] else 1) - 1))
+        elif final == "A": self.r = max(0, self.r - n1)
+        elif final == "B": self.r = min(self.rows - 1, self.r + n1)
+        elif final == "C": self.c = min(self.cols - 1, self.c + n1)
+        elif final == "D": self.c = max(0, self.c - n1)
+        elif final == "G": self.c = min(self.cols - 1, n1 - 1)
+        elif final == "d": self.r = min(self.rows - 1, n1 - 1)
+        elif final == "J":
+            mode = nums[0] if nums else 0
+            if mode == 0:
+                self.grid[self.r][self.c:] = [self.cell(" ")] * (self.cols - self.c)
+                for i in range(self.r + 1, self.rows): self.grid[i] = [self.cell(" ")] * self.cols
+            elif mode == 1:
+                self.grid[self.r][:self.c + 1] = [self.cell(" ")] * (self.c + 1)
+                for i in range(self.r): self.grid[i] = [self.cell(" ")] * self.cols
+            else:
+                for i in range(self.rows): self.grid[i] = [self.cell(" ")] * self.cols
+        elif final == "K":
+            mode = nums[0] if nums else 0
+            row = self.grid[self.r]
+            if mode == 0: row[self.c:] = [self.cell(" ")] * (self.cols - self.c)
+            elif mode == 1: row[:self.c + 1] = [self.cell(" ")] * (self.c + 1)
+            else: self.grid[self.r] = [self.cell(" ")] * self.cols
+        elif final == "X":
+            for i in range(self.c, min(self.cols, self.c + n1)): self.grid[self.r][i] = self.cell(" ")
+        elif final == "@":
+            row = self.grid[self.r]
+            row[self.c:self.c] = [self.cell(" ")] * n1
+            del row[self.cols:]
+        elif final == "P":
+            row = self.grid[self.r]
+            del row[self.c:self.c + n1]
+            row.extend([self.cell(" ")] * (self.cols - len(row)))
+        elif final == "L" and self.top <= self.r <= self.bot:
+            for _ in range(n1):
+                del self.grid[self.bot]; self.grid.insert(self.r, [self.cell(" ")] * self.cols)
+        elif final == "M" and self.top <= self.r <= self.bot:
+            for _ in range(n1):
+                del self.grid[self.r]; self.grid.insert(self.bot, [self.cell(" ")] * self.cols)
+        elif final == "S": self.scroll(n1)
+        elif final == "T": self.scroll(-n1)
+        elif final == "r":
+            self.top = max(0, (nums[0] if nums and nums[0] else 1) - 1)
+            self.bot = min(self.rows - 1, (nums[1] if len(nums) > 1 and nums[1] else self.rows) - 1)
+            self.r = self.c = 0
+        elif final == "b":
+            for _ in range(n1): self.put(self.last)
+
+    def feed(self, text):
+        text = self.buf + text
+        self.buf = ""
+        i, n = 0, len(text)
+        while i < n:
+            ch = text[i]
+            if ch == "\x1b":
+                if i + 1 >= n:
+                    self.buf = text[i:]; return
+                nx = text[i + 1]
+                if nx == "[":
+                    m = re.compile(r"[0-?]*([ -/]*)([@-~])").match(text, i + 2)
+                    if not m:
+                        self.buf = text[i:]; return
+                    params = text[i + 2:m.start(1)]
+                    self.csi(params, m.group(1), m.group(2))
+                    i = m.end()
+                elif nx in "]PX^_":                # OSC / DCS / ...: skip to BEL or ST
+                    m = re.compile(r"\x07|\x1b\\").search(text, i + 2)
+                    if not m:
+                        self.buf = text[i:]; return
+                    i = m.end()
+                else:
+                    i += 2 + (1 if nx in "()#%" else 0)
+            elif ch == "\n": self.linefeed(); i += 1
+            elif ch == "\r": self.c = 0; i += 1
+            elif ch == "\b": self.c = max(0, self.c - 1); i += 1
+            elif ch == "\t": self.c = min(self.cols - 1, (self.c // 8 + 1) * 8); i += 1
+            elif ch >= " ": self.put(ch); i += 1
+            else: i += 1
+
+    def html(self):
+        out = []
+        for row in self.grid:
+            cells = [(ch, f, b, a) for ch, f, b, a in row]
+            while cells and cells[-1][0] == " " and cells[-1][2] is None and not cells[-1][3] & 8:
+                cells.pop()
+            s, k = "", 0
+            while k < len(cells):
+                _, f, b, a = cells[k]
+                j = k
+                while j < len(cells) and cells[j][1:] == (f, b, a):
+                    j += 1
+                if a & 8: f, b = b or BG, f or FG                  # reverse video
+                chunk = html.escape("".join(c[0] for c in cells[k:j]), quote=False)
+                style = ";".join(x for x in (f and "color:" + f, b and "background-color:" + b,
+                                             a & 1 and "font-weight:bold", a & 2 and "font-style:italic",
+                                             a & 4 and "text-decoration:underline") if x)
+                s += ('<span style="%s">%s</span>' % (style, chunk)) if style else chunk
+                k = j
+            out.append(s)
+        return "\n".join(out)
+
+
+def snapshot():
+    master, slave = pty.openpty()
+    fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", ROWS, COLS, 0, 0))
+    env = dict(os.environ, TERM="xterm-256color", COLORTERM="truecolor", COLUMNS=str(COLS), LINES=str(ROWS),
+               NVIM_NO_TS_INSTALL="1")        # a snapshot must not start downloading treesitter parsers
+    p = subprocess.Popen(["nvim", FILE], env=env, stdin=slave, stdout=slave, stderr=slave, start_new_session=True,
+                         close_fds=True, preexec_fn=lambda: fcntl.ioctl(0, termios.TIOCSCTTY, 0))
+    os.close(slave)
+    scr, dec = Screen(ROWS, COLS), __import__("codecs").getincrementaldecoder("utf-8")("replace")
+    last_data, start, sent = time.time(), time.time(), 0
+
+    def pump(wait):
+        nonlocal last_data
+        r, _, _ = select.select([master], [], [], wait)
+        if not r:
+            return
+        try:
+            data = os.read(master, 65536)
+        except OSError:
+            return
+        if data:
+            last_data = time.time()
+            # nvim asks the terminal questions at start-up (device attributes, colours, keyboard protocol); a real
+            # terminal answers, a pty with nobody on the other end just makes nvim wait for its timeout. Answer the
+            # one that matters: primary device attributes.
+            if b"\x1b[c" in data:
+                os.write(master, b"\x1b[?62;c")
+            scr.feed(dec.decode(data))
+
+    steps = ["\r", "\r"] + ([KEYS] if KEYS else [])      # dismiss any hit-enter prompt, then open the tree
+    while time.time() - start < MAX_S:
+        pump(0.3)
+        if time.time() - last_data > SETTLE_S:
+            if sent < len(steps):
+                os.write(master, steps[sent].encode()); sent += 1; last_data = time.time()
+            else:
+                break
+    try:
+        os.killpg(p.pid, signal.SIGKILL)
+    except OSError:
+        pass
+    p.wait()
+    os.close(master)
+    return scr
+
+
+def main():
+    scr = snapshot()
+    host = os.uname().nodename
+    page = """<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>nvim - %(host)s</title>
+<style type="text/css">
+body     { background-color: %(page)s; color: %(fg)s; margin: 20px 30px; font-family: "JetBrains Mono", monospace; }
+pre.term { background-color: %(bg)s; color: %(fg)s; border: 1px solid #2f334d; padding: 12px 16px; margin: 0 0 14px 0; font-size: 13px; }
+a        { color: #7aa2f7; }
+.note    { color: #565f89; font-size: 12px; }
+</style>
+</head>
+<body>
+<pre class="term">%(screen)s</pre>
+<p class="note">neovim %(file)s &middot; a snapshot of the real nvim (your init.lua and plugins) drawn into a pseudo-terminal; Dillo cannot run an interactive one &middot; <a href="/">back</a></p>
+</body>
+</html>
+""" % dict(host=html.escape(host), page=PAGE, fg=FG, bg=BG, screen=scr.html(), file=html.escape(os.path.basename(FILE)))
+    os.makedirs(os.path.dirname(OUT), exist_ok=True)
+    with open(OUT, "w") as f:
+        f.write(page)
+
+
+if __name__ == "__main__":
+    import shutil
+    if not shutil.which("nvim"):
+        sys.exit("nvim-html: nvim not found")
+    main()
