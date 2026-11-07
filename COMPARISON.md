@@ -204,7 +204,7 @@ Mage asking questions at `cast` time.
 | Stated stance | friendly, assumes you can learn | courteous, respectful, accountable | committed contributors who read first |
 | What it asks of you | RTFM, curiosity | follow the Code of Conduct | help develop, read docs, use IRC, give back |
 | Becoming a developer | anyone who can write a patch | via the project's developer process | expected of every user |
-| Main channels | IRC, mailing lists | forums, IRC, mailing lists, Bugzilla | `#exherbo` on Libera.Chat, exherbo-dev list |
+| Main channels | e-mail, mailing lists, IRC, forums ([Contact](https://sourcemage.org/Contact)) | forums, IRC, mailing lists, Bugzilla ([Get involved](https://www.gentoo.org/get-involved/), [Support](https://www.gentoo.org/support/)) | `#exherbo` on Libera.Chat (primary), exherbo-dev mailing list ([expectations](https://exherbo.org/docs/expectations.html)) |
 | Enforcement | not described on that page | Community Relations, appeals to the Council | not described on that page |
 
 ## What this means for this installer
