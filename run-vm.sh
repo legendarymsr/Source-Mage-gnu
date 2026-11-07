@@ -111,8 +111,8 @@ if [[ -z "$DISPLAY_TYPE" ]]; then
     qemu-system-x86_64 -display help 2>/dev/null | grep -qw "$d" && { DISPLAY_TYPE="$d"; break; }
   done
 fi
-if [[ -n "$DISPLAY_TYPE" ]]; then DISP=(-vga virtio -display "$DISPLAY_TYPE")
-else warn "no gtk/sdl display in this qemu — using VNC on localhost:5900"; DISP=(-vga virtio -display none -vnc :0); fi
+if [[ -n "$DISPLAY_TYPE" ]]; then DISP=(-vga std -display "$DISPLAY_TYPE")
+else warn "no gtk/sdl display in this qemu — using VNC on localhost:5900"; DISP=(-vga std -display none -vnc :0); fi
 
 ARGS=(
   "${ACCEL[@]}"
