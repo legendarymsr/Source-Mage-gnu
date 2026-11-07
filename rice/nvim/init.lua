@@ -8,6 +8,16 @@ if not (vim.uv or vim.loop).fs_stat(lazypath) then
 end
 vim.opt.rtp:prepend(lazypath)
 
+-- 1b. a missing treesitter parser must not be an error. Neovim's own ftplugins (lua, vim, markdown...) call
+-- vim.treesitter.start(), which asserts when the parser is not installed; this build ships none, and
+-- nvim-treesitter below downloads them in the background (needs network and a C compiler once).
+do
+  local start = vim.treesitter.start
+  vim.treesitter.start = function(...)
+    return pcall(start, ...)
+  end
+end
+
 -- 2. options
 vim.g.mapleader = " "
 vim.opt.number = true
