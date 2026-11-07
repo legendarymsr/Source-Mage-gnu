@@ -262,6 +262,15 @@ GRUB_END
     elif ! grep -q '^ttyS0:' "$MNT/etc/inittab"; then
       sed -i '/^tty6:/a ttyS0:linux:/sbin/agetty -L ttyS0 115200 vt100' "$MNT/etc/inittab"
     fi
+    # The base system ships /etc/network/interfaces with only lo (eth0 is a commented static example), so the
+    # "network" service never brings the virtio NIC up and the guest has no DHCP lease. The kernel names it eth0.
+    write /etc/network/interfaces <<NET_END
+auto lo
+iface lo inet loopback
+
+auto eth0
+iface eth0 inet dhcp
+NET_END
   fi
   if [[ $PROFILE == macbookair ]]; then
     write /etc/modprobe.d/sound.conf <<SND_END
