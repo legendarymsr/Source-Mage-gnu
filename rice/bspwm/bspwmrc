@@ -11,9 +11,8 @@ picom &                               # compositor
 dunst &                               # notifications
 "$HOME/.config/dzen2/bar.sh" &        # the bar: ram · battery · date (dzen2, C)
 mkdir -p "$HOME/www"
-# ~/www on http://localhost:8080 (loopback only) for Dillo; fastfetch-html writes ~/www/fastfetch.html at login
-command -v python3 >/dev/null 2>&1 && python3 -m http.server 8080 --bind 127.0.0.1 --directory "$HOME/www" >/dev/null 2>&1 &
-( sleep 3; "$HOME/.config/fastfetch/fastfetch-html" ) &
+# ~/www on http://localhost:8080 (loopback only) for Dillo; /fastfetch.html is regenerated on every load
+command -v python3 >/dev/null 2>&1 && "$HOME/.config/fastfetch/www-server" &
 
 bspc monitor -d 1 2 3 4 5 6 7 8 9
 

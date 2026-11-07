@@ -168,11 +168,11 @@ installed with your Tokyo Night config, minus the `logo.color` override: fastfet
 `rice/fastfetch/fastfetch-html` (Python 3, standard library only; Python is already in the base system) runs the
 real fastfetch with your config and turns its ANSI output (truecolor, bold, the column jumps that put the info beside
 the logo) into a terminal-style page: a dark box with a `user@host:~$ fastfetch` prompt, the coloured output, a
-trailing prompt with a cursor block, and a `back` link. bspwm serves `~/www` on `http://localhost:8080`
-(loopback only, `python3 -m http.server`) and regenerates the page at login; `super+w` opens
-`http://localhost:8080/fastfetch.html` in Dillo, `super+shift+w` a blank Dillo. fastfetch reports the shell and
-terminal from its parent processes, which are the script and bspwm here, so the generator prints the real values
-(`bash`, `st`). Run `~/.config/fastfetch/fastfetch-html` to refresh it by hand.
+trailing prompt with a cursor block, and a `back` link. `rice/fastfetch/www-server` serves `~/www` on
+`http://localhost:8080` (loopback only) and re-runs the generator on every load of `/fastfetch.html`, so a reload in
+Dillo re-runs fastfetch. `super+w` opens it, `super+shift+w` opens a blank Dillo. On Linux fastfetch reads the
+process tree (parent = shell, grandparent = terminal), so the generator runs it as python → `dillo` (a copy of `sh`
+with that name) → bash → fastfetch, and fastfetch itself reports `terminal dillo` and the real shell version.
 
 | key | action |
 |---|---|

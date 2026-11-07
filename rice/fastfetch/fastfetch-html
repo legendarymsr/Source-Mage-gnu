@@ -4,11 +4,11 @@
 #   fastfetch-html [output.html]     default: ~/www/fastfetch.html
 #
 # Runs the real fastfetch with YOUR config (colours included), converts its ANSI output to HTML and wraps it in a
-# dark "terminal" box with a prompt line and a cursor. bspwmrc serves ~/www on http://localhost:8080 and runs this
-# at login; super+w opens http://localhost:8080/fastfetch.html in Dillo. Standard library only; Dillo has no
+# dark "terminal" box with a prompt line and a cursor. www-server serves ~/www on http://localhost:8080 and runs this
+# on every load of /fastfetch.html, so reloading Dillo re-runs fastfetch (Terminal: dillo); super+w opens it. Standard library only; Dillo has no
 # JavaScript and basic CSS, so the page is a <pre> full of coloured <span>s.
 
-import getpass, html, json, os, re, shutil, socket, subprocess, sys, tempfile
+import getpass, html, json, os, re, shlex, shutil, socket, subprocess, sys, tempfile
 
 HOME = os.path.expanduser("~")
 OUT = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HOME, "www", "fastfetch.html")
@@ -52,19 +52,6 @@ def run(cmd):
         return ""
 
 
-def shell_value():
-    sh = os.environ.get("SHELL", "/bin/bash")
-    first = (run([sh, "--version"]).splitlines() or [""])[0]
-    m = re.search(r"version (\d[\d.]*)", first)
-    return os.path.basename(sh) + (" " + m.group(1) if m else "")
-
-
-def terminal_value():
-    if not shutil.which("st"):
-        return "st"
-    return (run(["st", "-v"]).splitlines() or ["st"])[0]
-
-
 def load_config():
     for p in (os.path.join(HOME, ".config/fastfetch/config.jsonc"), "/etc/xdg/fastfetch/config.jsonc"):
         if os.path.exists(p):
@@ -75,22 +62,24 @@ def load_config():
 
 def fastfetch_ansi():
     cfg = load_config()
-    # fastfetch derives "shell" and "terminal" from its parent processes, which here are this script and bspwmrc:
-    # print the real values instead.
-    for i, m in enumerate(cfg.get("modules", [])):
-        t = m.get("type") if isinstance(m, dict) else None
-        if t in ("shell", "terminal"):
-            cfg["modules"][i] = {"type": "custom", "key": m.get("key", t),
-                                 "format": shell_value() if t == "shell" else terminal_value()}
     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as tmp:
         json.dump(cfg, tmp)
+    # On Linux fastfetch reads the process tree: the parent is the SHELL, the grandparent the TERMINAL (TERM_PROGRAM
+    # is ignored). The reader's terminal is Dillo, so run  python -> "dillo" -> bash -> fastfetch, where "dillo" is a
+    # copy of sh with that name (a symlink does not work: fastfetch resolves /proc/<pid>/exe and sees the real sh).
+    # The trailing "; :" keeps each shell from exec-ing its last command, which would remove it from the tree.
+    tmpdir = tempfile.mkdtemp(prefix="fastfetch-html-")
+    link = os.path.join(tmpdir, "dillo")
+    shutil.copy2("/bin/sh", link)
     try:
-        env = dict(os.environ, TERM="xterm-256color")
-        r = subprocess.run(["fastfetch", "-c", tmp.name, "--pipe", "false"], capture_output=True, text=True,
-                           env=env, stdin=subprocess.DEVNULL, timeout=30)
+        shell = os.environ.get("SHELL", "/bin/bash")
+        args = " ".join(shlex.quote(a) for a in ("fastfetch", "-c", tmp.name, "--pipe", "false"))
+        inner = "%s -c %s; :" % (shlex.quote(shell), shlex.quote(args + "; :"))
+        r = subprocess.run([link, "-c", inner], capture_output=True, text=True,
+                           env=dict(os.environ, TERM="xterm-256color"), stdin=subprocess.DEVNULL, timeout=30)
         return r.stdout
     finally:
-        os.unlink(tmp.name)
+        os.unlink(tmp.name); os.unlink(link); os.rmdir(tmpdir)
 
 
 def xterm256(n):
