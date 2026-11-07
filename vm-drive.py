@@ -21,11 +21,11 @@ def log_size(path):
         return 0
 
 
-def send(sock_path, data):
+def send(sock_path, data, pause=0.15):
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     s.connect(sock_path)
     s.sendall(data)
-    time.sleep(0.15)
+    time.sleep(pause)
     s.close()
 
 
@@ -79,16 +79,20 @@ def main():
         sys.stdout.write("\n")
         sys.exit(int(m.group(1)) if m else 124)
     if action == "put":
+        # base64 in short lines (the console is a slow, small-buffered serial line), then verify with sha256
         src, dest = args
-        data = base64.b64encode(open(src, "rb").read()).decode()
+        raw = open(src, "rb").read()
+        import hashlib
+        want = hashlib.sha256(raw).hexdigest()
+        data = base64.b64encode(raw).decode()
         tag = secrets.token_hex(4)
         off = log_size(log)
-        send(sock, ("cat > /tmp/put.b64 <<'PUT_EOF'\n").encode())
-        for i in range(0, len(data), 76 * 20):
-            send(sock, (data[i:i + 76 * 20] + "\n").encode())
-        send(sock, ('PUT_EOF\nbase64 -d /tmp/put.b64 > %s && echo __SM""DONE_%s__0__ || echo __SM""DONE_%s__1__\n'
-                    % (dest, tag, tag)).encode())
-        m, _ = pump(log, off, r"__SMDONE_%s__(\d+)__" % tag, 60, echo=False)
+        send(sock, b"stty -echo; cat > /tmp/put.b64 <<'PUT_EOF'\n")
+        for i in range(0, len(data), 76):
+            send(sock, (data[i:i + 76] + "\n").encode(), 0.02)
+        send(sock, ('PUT_EOF\nstty echo; base64 -d /tmp/put.b64 > %s && [ "$(sha256sum < %s | cut -d" " -f1)" = %s ]; '
+                    'echo __SM""DONE_%s__$?__\n' % (dest, dest, want, tag)).encode())
+        m, _ = pump(log, off, r"__SMDONE_%s__(\d+)__" % tag, 120, echo=False)
         sys.exit(int(m.group(1)) if m else 124)
     sys.exit("unknown action: " + action)
 
