@@ -228,8 +228,8 @@ if [[ -n "$CA_BUNDLE" ]]; then
   g 'export CURL_CA_BUNDLE=/root/ca.pem SSL_CERT_FILE=/root/ca.pem' 30 >/dev/null
 fi
 
-header "Checking the guest's network"
-g 'for i in $(seq 30); do curl -fsS -o /dev/null -m 8 https://download.sourcemage.org/ && exit 0; sleep 3; done; exit 1' 200 \
+header "Checking the guest's network"   # (the loop runs in a subshell: a bare exit would log the live shell out)
+g '(for i in $(seq 30); do curl -fsS -o /dev/null -m 8 https://download.sourcemage.org/ && exit 0; sleep 3; done; exit 1)' 200 \
   || die "the guest has no internet (user-mode NAT should give it one: check the host's connection / proxy, CA_BUNDLE)"
 
 g 'mkdir -p /root/sm && tar xf /dev/vdb -C /root/sm && chmod +x /root/sm/install.sh && ls /root/sm' 60 >/dev/null || die "could not unpack the installer in the guest"
