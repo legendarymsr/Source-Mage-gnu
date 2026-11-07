@@ -7,7 +7,7 @@ super + Return
 super + p
 	rofi -show drun
 super + w
-	dillo "$HOME/fastfetch.html"
+	dillo http://localhost:8080/fastfetch.html
 super + shift + w
 	dillo
 super + e

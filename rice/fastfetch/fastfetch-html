@@ -1,79 +1,241 @@
-#!/bin/sh
-# ~/.config/fastfetch/fastfetch-html — render fastfetch as a Tokyo Night HTML page for Dillo.
+#!/usr/bin/env python3
+# ~/.config/fastfetch/fastfetch-html — show fastfetch in Dillo as a terminal-style page.
 #
-#   fastfetch-html [output.html]        default: ~/fastfetch.html (opened by super+w)
+#   fastfetch-html [output.html]     default: ~/www/fastfetch.html
 #
-# Dillo has no JavaScript and only basic CSS, so this is a static page: real fastfetch output (the built-in
-# Source Mage logo and the system info) wrapped in a tables-and-colours layout. bspwmrc regenerates it on every
-# login; run it by hand to refresh.
+# Runs the real fastfetch with YOUR config (colours included), converts its ANSI output to HTML and wraps it in a
+# dark "terminal" box with a prompt line and a cursor. bspwmrc serves ~/www on http://localhost:8080 and runs this
+# at login; super+w opens http://localhost:8080/fastfetch.html in Dillo. Standard library only; Dillo has no
+# JavaScript and basic CSS, so the page is a <pre> full of coloured <span>s.
 
-out="${1:-$HOME/fastfetch.html}"
-command -v fastfetch >/dev/null 2>&1 || { echo "fastfetch-html: fastfetch not found" >&2; exit 1; }
+import getpass, html, json, os, re, shutil, socket, subprocess, sys, tempfile
 
-esc() { sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'; }
+HOME = os.path.expanduser("~")
+OUT = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HOME, "www", "fastfetch.html")
 
-# -c none: ignore the colourful config here, we colour it with CSS instead
-logo=$(fastfetch -c none --pipe true -s Break 2>/dev/null | sed '/^[[:space:]]*$/d' | esc)
-info=$(fastfetch -c none --logo none --pipe true \
-  -s title:os:kernel:initsystem:uptime:packages:shell:wm:terminal:cpu:gpu:memory:swap:disk 2>/dev/null)
+# st's Tokyo Night palette (the colorname[] table in st's config.h), so the page matches the terminal
+BASE16 = ["#15161e", "#f7768e", "#9ece6a", "#e0af68", "#7aa2f7", "#bb9af7", "#7dcfff", "#a9b1d6",
+          "#414868", "#f7768e", "#9ece6a", "#e0af68", "#7aa2f7", "#bb9af7", "#7dcfff", "#c0caf5"]
+FG, BOX, PAGE = "#c0caf5", "#1a1b26", "#16161e"
 
-# fastfetch derives "shell" and "terminal" from its parent processes; when bspwmrc runs this script those are just
-# "sh" and "fastfetch-html", so report the login shell and the terminal the rice uses instead.
-shv=""; [ -n "$SHELL" ] && shv="$(basename "$SHELL") $("$SHELL" --version 2>/dev/null | sed -n '1s/.*version \([0-9][0-9.]*\).*/\1/p')"
-tv="";  command -v st >/dev/null 2>&1 && tv=$(st -v 2>&1 | sed -n 1p)
 
-title=$(printf '%s\n' "$info" | sed -n 1p | esc)
-rows=$(printf '%s\n' "$info" | sed 1d | esc | awk -F': ' -v shv="$shv" -v tv="$tv" '
-  { k = tolower($1); sub(/^[^:]*: /, ""); sub(/ \(\/\)$/, "", k)
-    if (k == "init system") k = "init"; if (k == "window manager") k = "wm"
-    if (k == "shell" && shv != "") $0 = shv
-    if (k == "terminal" && tv != "") $0 = tv
-    printf "<tr><td class=\"k\">%s</td><td class=\"v\">%s</td></tr>\n", k, $0 }')
-now=$(date '+%a %d %b %Y, %H:%M')
+def strip_jsonc(text):
+    """Remove // and /* */ comments, but not inside strings (the $schema URL contains //)."""
+    out, i, n, in_str = [], 0, len(text), False
+    while i < n:
+        c = text[i]
+        if in_str:
+            out.append(c)
+            if c == "\\":
+                out.append(text[i + 1]); i += 1
+            elif c == '"':
+                in_str = False
+        elif c == '"':
+            in_str = True; out.append(c)
+        elif text.startswith("//", i):
+            while i < n and text[i] != "\n":
+                i += 1
+            continue
+        elif text.startswith("/*", i):
+            i = text.find("*/", i) + 2
+            continue
+        else:
+            out.append(c)
+        i += 1
+    return "".join(out)
 
-cat > "$out" <<HTML_END
-<!DOCTYPE html>
+
+def run(cmd):
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=10, stdin=subprocess.DEVNULL).stdout.strip()
+    except Exception:
+        return ""
+
+
+def shell_value():
+    sh = os.environ.get("SHELL", "/bin/bash")
+    first = (run([sh, "--version"]).splitlines() or [""])[0]
+    m = re.search(r"version (\d[\d.]*)", first)
+    return os.path.basename(sh) + (" " + m.group(1) if m else "")
+
+
+def terminal_value():
+    if not shutil.which("st"):
+        return "st"
+    return (run(["st", "-v"]).splitlines() or ["st"])[0]
+
+
+def load_config():
+    for p in (os.path.join(HOME, ".config/fastfetch/config.jsonc"), "/etc/xdg/fastfetch/config.jsonc"):
+        if os.path.exists(p):
+            with open(p) as f:
+                return json.loads(strip_jsonc(f.read()))
+    return {}
+
+
+def fastfetch_ansi():
+    cfg = load_config()
+    # fastfetch derives "shell" and "terminal" from its parent processes, which here are this script and bspwmrc:
+    # print the real values instead.
+    for i, m in enumerate(cfg.get("modules", [])):
+        t = m.get("type") if isinstance(m, dict) else None
+        if t in ("shell", "terminal"):
+            cfg["modules"][i] = {"type": "custom", "key": m.get("key", t),
+                                 "format": shell_value() if t == "shell" else terminal_value()}
+    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as tmp:
+        json.dump(cfg, tmp)
+    try:
+        env = dict(os.environ, TERM="xterm-256color")
+        r = subprocess.run(["fastfetch", "-c", tmp.name, "--pipe", "false"], capture_output=True, text=True,
+                           env=env, stdin=subprocess.DEVNULL, timeout=30)
+        return r.stdout
+    finally:
+        os.unlink(tmp.name)
+
+
+def xterm256(n):
+    if n < 16:
+        return BASE16[n]
+    if n < 232:
+        n -= 16
+        lv = [0, 95, 135, 175, 215, 255]
+        return "#%02x%02x%02x" % (lv[n // 36], lv[(n // 6) % 6], lv[n % 6])
+    g = 8 + (n - 232) * 10
+    return "#%02x%02x%02x" % (g, g, g)
+
+
+def ansi_to_html(text):
+    """Tiny terminal emulator: SGR colours/bold, ESC[nG / ESC[nC cursor moves, newlines."""
+    lines, line, col = [], [], 0
+    fg, bg, bold = None, None, False
+    i, n = 0, len(text)
+
+    def put(ch):
+        nonlocal col
+        cell = (ch, fg, bg, bold)
+        while len(line) < col:
+            line.append((" ", None, None, False))
+        if col < len(line):
+            line[col] = cell
+        else:
+            line.append(cell)
+        col += 1
+
+    while i < n:
+        c = text[i]
+        if c == "\x1b" and text.startswith("[", i + 1):
+            m = re.match(r"\x1b\[([0-9;?]*)([A-Za-z])", text[i:])
+            if not m:
+                i += 1
+                continue
+            params, final = m.group(1), m.group(2)
+            i += m.end()
+            nums = [int(x) if x.isdigit() else 0 for x in params.split(";")] if params else []
+            if final == "m":
+                k = 0
+                nums = nums or [0]
+                while k < len(nums):
+                    v = nums[k]
+                    if v == 0: fg = bg = None; bold = False
+                    elif v == 1: bold = True
+                    elif v == 22: bold = False
+                    elif 30 <= v <= 37: fg = BASE16[v - 30]
+                    elif 90 <= v <= 97: fg = BASE16[v - 90 + 8]
+                    elif v == 39: fg = None
+                    elif 40 <= v <= 47: bg = BASE16[v - 40]
+                    elif 100 <= v <= 107: bg = BASE16[v - 100 + 8]
+                    elif v == 49: bg = None
+                    elif v in (38, 48) and k + 1 < len(nums):
+                        if nums[k + 1] == 2 and k + 4 < len(nums):
+                            colr = "#%02x%02x%02x" % tuple(nums[k + 2:k + 5]); k += 4
+                        elif nums[k + 1] == 5 and k + 2 < len(nums):
+                            colr = xterm256(nums[k + 2]); k += 2
+                        else:
+                            colr = None
+                        if v == 38: fg = colr
+                        else: bg = colr
+                        k += 1
+                    k += 1
+            elif final == "G":
+                col = max(0, (nums[0] if nums else 1) - 1)
+            elif final == "C":
+                col += nums[0] if nums else 1
+            elif final == "D":
+                col = max(0, col - (nums[0] if nums else 1))
+            continue                      # any other CSI sequence (cursor visibility, erase, ...) is ignored
+        if c == "\n":
+            lines.append(line); line, col = [], 0
+        elif c == "\r":
+            col = 0
+        elif c >= " ":
+            put(c)
+        i += 1
+    if line:
+        lines.append(line)
+
+    out = []
+    for ln in lines:
+        while ln and ln[-1][0] == " " and ln[-1][2] is None:
+            ln = ln[:-1]
+        s, k = "", 0
+        while k < len(ln):
+            _, f, b, bd = ln[k]
+            j = k
+            while j < len(ln) and ln[j][1:] == (f, b, bd):
+                j += 1
+            chunk = html.escape("".join(ch for ch, *_ in ln[k:j]), quote=False)
+            style = ";".join(x for x in (f and "color:" + f, b and "background-color:" + b, bd and "font-weight:bold") if x)
+            s += ('<span style="%s">%s</span>' % (style, chunk)) if style else chunk
+            k = j
+        out.append(s)
+    return "\n".join(out)
+
+
+def main():
+    user, host = getpass.getuser(), socket.gethostname()
+    prompt = "%s@%s:~$" % (user, host)
+    body = ansi_to_html(fastfetch_ansi()).strip("\n")
+    cursor = '<span style="background-color:%s;color:%s"> </span>' % (FG, BOX)
+    page = """<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
-<title>fastfetch - Source Mage GNU/Linux</title>
+<title>fastfetch - %(host)s</title>
 <style type="text/css">
-body    { background-color: #1a1b26; color: #c0caf5; font-family: "JetBrains Mono", monospace; margin: 22px; }
-h1      { color: #bb9af7; font-size: 22px; margin: 0 0 2px 0; }
-p.sub   { color: #565f89; margin: 0 0 18px 0; }
-a       { color: #7aa2f7; }
-pre.logo { color: #7aa2f7; background-color: #16161e; border: 1px solid #414868; padding: 12px 16px; margin: 0 0 16px 0; }
-table.info { background-color: #16161e; border: 1px solid #414868; }
-table.info td { padding: 5px 16px; }
-td.k    { color: #7aa2f7; font-weight: bold; }
-td.v    { color: #c0caf5; }
-h2      { color: #7dcfff; font-size: 15px; margin: 16px 0 8px 0; }
-td.sw   { width: 30px; height: 24px; font-family: "DejaVu Sans", sans-serif; color: #1a1b26; }
-p.foot  { color: #565f89; margin: 22px 0 0 0; font-size: 12px; }
+body     { background-color: %(page)s; color: %(fg)s; margin: 20px 30px; font-family: "JetBrains Mono", monospace; }
+pre.term { background-color: %(box)s; color: %(fg)s; border: 1px solid #2f334d; padding: 12px 16px; margin: 0 0 14px 0; font-size: 13px; }
+a        { color: #7aa2f7; }
 </style>
 </head>
 <body>
-<h1>$title</h1>
-<p class="sub">Source Mage GNU/Linux &middot; built from source with sorcery</p>
-<pre class="logo">$logo</pre>
-<h2>system</h2>
-<table class="info">
-$rows
-</table>
-<h2>palette</h2>
-<table>
-<tr>
-<td class="sw" style="background-color:#414868">&nbsp;</td>
-<td class="sw" style="background-color:#a9b1d6">&nbsp;</td>
-<td class="sw" style="background-color:#7dcfff">&nbsp;</td>
-<td class="sw" style="background-color:#bb9af7">&nbsp;</td>
-<td class="sw" style="background-color:#7aa2f7">&nbsp;</td>
-<td class="sw" style="background-color:#e0af68">&nbsp;</td>
-<td class="sw" style="background-color:#9ece6a">&nbsp;</td>
-<td class="sw" style="background-color:#f7768e">&nbsp;</td>
-</tr>
-</table>
-<p class="foot">generated $now by fastfetch-html &middot; <a href="file:$out">reload to refresh</a></p>
+<pre class="term">%(prompt)s fastfetch
+%(body)s
+
+%(prompt)s %(cursor)s</pre>
+<p><a href="/">back</a></p>
 </body>
 </html>
-HTML_END
+""" % dict(host=html.escape(host), page=PAGE, fg=FG, box=BOX, prompt=html.escape(prompt), body=body, cursor=cursor)
+    os.makedirs(os.path.dirname(OUT), exist_ok=True)
+    with open(OUT, "w") as f:
+        f.write(page)
+    index = os.path.join(os.path.dirname(OUT), "index.html")
+    if not os.path.exists(index):
+        with open(index, "w") as f:
+            f.write("""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>%(host)s</title>
+<style type="text/css">
+body { background-color: %(page)s; color: %(fg)s; margin: 30px; font-family: "JetBrains Mono", monospace; }
+h1 { color: #bb9af7; } a { color: #7aa2f7; }
+</style></head>
+<body><h1>%(host)s</h1>
+<p>served from ~/www on http://localhost:8080</p>
+<ul><li><a href="fastfetch.html">fastfetch</a></li></ul>
+</body></html>
+""" % dict(host=html.escape(host), page=PAGE, fg=FG))
+
+
+if __name__ == "__main__":
+    if not shutil.which("fastfetch"):
+        sys.exit("fastfetch-html: fastfetch not found")
+    main()
