@@ -55,6 +55,10 @@ ask() { # ask VAR "prompt" default — env wins, else 10s prompt, else default
 }
 
 # ── Configuration ─────────────────────────────────────────────────────────────
+# Never guess the disk to wipe without a person at the keyboard: unattended runs must name it.
+if [[ -z "${DISK:-}" && ( "${ASSUME_YES:-0}" == 1 || ! -t 0 ) && "${DRY_RUN:-0}" != 1 ]]; then
+  die "DISK is not set — refusing to pick a disk to wipe on an unattended run (e.g. DISK=/dev/vda)"
+fi
 ask DISK "Target disk to WIPE?" "/dev/vda"
 if [[ -z "${PROFILE:-}" ]]; then case "$DISK" in /dev/vd*) PROFILE=vm ;; *) PROFILE=macbookair ;; esac; fi
 case "$PROFILE" in vm|macbookair) ;; *) die "PROFILE must be vm or macbookair" ;; esac
