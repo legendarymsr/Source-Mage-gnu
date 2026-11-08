@@ -376,6 +376,7 @@ fi
 header "Preparing chroot"
 for d in dev proc sys; do is_mounted "$MNT/$d" || run mount --rbind "/$d" "$MNT/$d"; done
 run cp -L /etc/resolv.conf "$MNT/etc/resolv.conf"
+run cp -L /etc/resolv.conf "$MNT/root/.sm-resolv.conf"   # pristine copy: a cast (dhcpcd etc.) can replace /etc/resolv.conf mid-install
 [[ -n "$CA_BUNDLE" ]] && run install -D -m 0644 "$CA_BUNDLE" "$MNT/root/ca-bundle.pem"
 
 SPELLS=("${SPELLS_CORE[@]}")
@@ -508,11 +509,14 @@ done
 # Kernel first, bootloader second: a bootable system exists even if a later
 # desktop cast fails. The linux spell opens a kernel config menu — see the
 # README for the options this machine needs built IN (no initramfs).
+# restore the live system's DNS before each cast phase: a cast can replace /etc/resolv.conf and break every later download
+fix_dns() { [[ -s /root/.sm-resolv.conf ]] && { rm -f /etc/resolv.conf; cp /root/.sm-resolv.conf /etc/resolv.conf; } || true; }
 echo "── Casting: \${CAST[*]}"
 for s in elfutils linux grub2 efibootmgr curl git mesa libxcursor xcb-util-cursor libxscrnsaver libxinerama libnotify libjpeg-turbo giflib libwebp luajit; do
   COPT=()
   # an earlier BIOS build of grub2 (no EFI modules) must be recompiled, not skipped as "no work to do"
   needs_recast "\$s" && is_installed "\$s" && COPT=(-c)
+  fix_dns
   [[ " \${CAST[*]} " == *" \$s "* ]] && { cast "\${COPT[@]}" "\$s" || { echo "warn: cast \$s failed (re-run ./install.sh resume)"; FAILED+=("cast \$s"); }; }
 done
 
@@ -522,10 +526,12 @@ grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=Sourc
 grub-mkconfig -o /boot/grub/grub.cfg || { echo "warn: grub-mkconfig failed"; FAILED+=("grub-mkconfig"); }
 
 REST=(); for s in "\${CAST[@]}"; do case "\$s" in elfutils|linux|grub2|efibootmgr|curl|git|mesa|libxcursor|xcb-util-cursor|libxscrnsaver|libxinerama|libnotify|libjpeg-turbo|giflib|libwebp|luajit|sudo) ;; *) REST+=("\$s") ;; esac; done
+fix_dns
 ((\${#REST[@]})) && { cast "\${REST[@]}" || { echo "warn: some casts failed — re-run: ./install.sh resume"; FAILED+=("cast \${REST[*]}"); }; }
 # sudo asks sorcery for its TEXT-EDITOR provider and gets neovim when neovim is in the same cast list; its build runs
 # a hash check for neovim, so it must come after everything else (otherwise: "hash: neovim: not found")
 for s in sudo; do
+  fix_dns
   [[ " \${CAST[*]} " == *" \$s "* ]] && { cast "\$s" || { echo "warn: cast \$s failed (re-run ./install.sh resume)"; FAILED+=("cast \$s"); }; }
 done
 
