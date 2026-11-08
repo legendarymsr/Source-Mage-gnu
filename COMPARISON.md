@@ -406,7 +406,15 @@ found, it says so.
   `sys-firmware/intel-microcode` is under `intel-ucode`
   ([package page](https://packages.gentoo.org/packages/sys-firmware/intel-microcode)). Neither
   licence is in `@FREE`, so the default `ACCEPT_LICENSE` refuses both until you accept them,
-  for example with `@BINARY-REDISTRIBUTABLE`.
+  for example with `@BINARY-REDISTRIBUTABLE`. The
+  [Going 100% Libre](https://wiki.gentoo.org/wiki/Going_100%25_Libre_with_Gentoo) page says linux-firmware "by default ... includes non-free firmware and
+  thus will not install if `ACCEPT_LICENSE="@FREE -*"` is set". It recommends
+  `sys-kernel/linux-firmware -redistributable` in `/etc/portage/package.use/`, which it says "is
+  intended to exclude firmware that is non-free or has redistribution restrictions". The same page
+  recommends `ACCEPT_LICENSE="-* @FREE"` in `make.conf`, optionally `-Artistic` and `-NPSL-0.95`,
+  and the `FSF-APPROVED` group for stricter FSF alignment. It also suggests
+  `USE="eme-free -proprietary-codecs -telemetry"`. Beyond the OS, it discusses free boot
+  firmware (GNU Boot, Canoeboot) to replace Intel ME/AMD PSP firmware.
 - **Exherbo**: `firmware/linux-firmware` and `firmware/intel-microcode` are in the official
   `hardware` repository, together with other blobs such as `b43-firmware` and `ipw2200-firmware`
   ([summer: hardware](https://summer.exherbo.org/repositories/hardware/index.html)).
@@ -425,16 +433,34 @@ deblobbed Linux. The FSF's free distros all ship it or an equivalent.
   libre or deblob spell, and no deblob files in the `linux` spell
   ([kernels/](https://codeberg.org/sourcemage/grimoire/src/branch/master/kernels)).
 - **Gentoo**: no `linux-libre` package in the official tree
-  ([packages.gentoo.org search](https://packages.gentoo.org/packages/search?q=linux-libre)).
-  None of the registered overlays is named for it
-  ([repositories.xml](https://api.gentoo.org/overlays/repositories.xml)), and the
+  ([packages.gentoo.org search](https://packages.gentoo.org/packages/search?q=linux-libre)), and
+  none of the registered overlays is named for it
+  ([repositories.xml](https://api.gentoo.org/overlays/repositories.xml)). The
   [gpo.zugaina.org](https://gpo.zugaina.org/Search?search=linux-libre) overlay index search found
-  no kernel package. The Gentoo wiki has no `Linux-libre` page (404). However,
-  [kernel-2.eclass](https://gitweb.gentoo.org/repo/gentoo.git/plain/eclass/kernel-2.eclass) has
-  built-in optional deblobbing ("deblob for libre support"): it adds a `deblob` USE flag when an
-  ebuild sets `K_DEBLOB_AVAILABLE=1`. The current
-  [gentoo-sources ebuild](https://gitweb.gentoo.org/repo/gentoo.git/tree/sys-kernel/gentoo-sources)
-  does not set it, so there's no `deblob` flag there.
+  no kernel package either. But there is a documented libre route. The Gentoo wiki's
+  [Going 100% Libre with Gentoo](https://wiki.gentoo.org/wiki/Going_100%25_Libre_with_Gentoo) says Gentoo "can be configured to meet the GNU Free System
+  Distribution Guidelines (GNU FSDG) with specific modifications". For the kernel it says "a
+  deblobbed kernel, such as Linux-libre, is required" and points to
+  [Kernel/Deblobbing](https://wiki.gentoo.org/wiki/Kernel/Deblobbing). That page gives two routes:
+  - **`sys-kernel/rt-sources` with `USE=deblob`**: "sources will be automatically deblobed after
+    being emerged". This uses
+    [kernel-2.eclass](https://gitweb.gentoo.org/repo/gentoo.git/plain/eclass/kernel-2.eclass)'s
+    built-in deblobbing ("deblob for libre support"), which fetches the FSFLA `deblob-X.Y` and
+    `deblob-check` scripts and runs them during the build. In a checkout of the tree today
+    (2026-11-08), all eight `rt-sources` ebuilds set `K_DEBLOB_AVAILABLE="1"`, and it's the only
+    kernel package that does
+    ([rt-sources](https://packages.gentoo.org/packages/sys-kernel/rt-sources)).
+    `raspberrypi-sources` sets it to `0`, and the current
+    [gentoo-sources ebuild](https://gitweb.gentoo.org/repo/gentoo.git/tree/sys-kernel/gentoo-sources)
+    doesn't set it, so there's no `deblob` flag there.
+  - **gentoo-sources (or any other sources), by hand**: emerge the sources, then download
+    `deblob-<main>`, `deblob-check` and their `.sign` files from the Linux-libre releases server.
+    Verify them with gpg, and run `./deblob-$main` in `/usr/src/linux`. The resulting kernel
+    gets a `-gnu` suffix (for example `6.8.1-gentoo-gnu`). The page notes that since 4.14 the
+    firmware tree is no longer in the kernel, so deblobbing is "unnecessary for new kernel
+    versions", but the Linux-libre patches also remove things such as firmware loaders. It
+    also warns that "devices that exclusively support proprietary firmware cannot be used",
+    which it says generally includes "all new Intel wireless cards".
 - **Exherbo**: no linux-libre package. Exherbo has no kernel package at all; `sys-kernel` only
   holds `caitsith`, `dkms`, `linux-headers` and `lux`
   ([summer: sys-kernel](https://summer.exherbo.org/packages/sys-kernel/index.html)). The install
@@ -474,8 +500,10 @@ its primary package system." Exherbo and Source Mage do not appear there.
   would leave that card without a driver unless you add another card.
 - **[legenddots Gentoo installer](https://github.com/legendarymsr/legenddots/blob/master/gentoo/install.sh)**:
   emerges `gentoo-sources`, `linux-firmware` and `intel-microcode`. To swap the kernel, you'd
-  deblob the tree yourself and leave the two firmware packages out, keeping `ACCEPT_LICENSE` at
-  `@FREE`.
+  switch to `rt-sources` with `USE=deblob`, or follow the wiki's manual deblob steps on
+  gentoo-sources. Leave `intel-microcode` out, set `linux-firmware -redistributable` (or drop it),
+  and keep `ACCEPT_LICENSE="-* @FREE"`
+  ([Going 100% Libre](https://wiki.gentoo.org/wiki/Going_100%25_Libre_with_Gentoo)).
 - **[legenddots Exherbo setup](https://github.com/legendarymsr/legenddots/blob/master/exherbo/exherbo-setup.sh)**:
   already builds the kernel from kernel.org, so you'd fetch the linux-libre tarball (or run
   `deblob-X.Y`) at that step and skip `cave resolve linux-firmware`.
@@ -484,13 +512,13 @@ its primary package system." Exherbo and Source Mage do not appear there.
 
 | | Source Mage | Gentoo | Exherbo |
 |---|---|---|---|
-| Free-software policy | Social Contract: 100% free core, user choice | Social Contract: free, but non-free in tree | no page found |
+| Free-software policy | Social Contract: 100% free core, user choice | Social Contract: free, but non-free in tree; wiki guide to an FSDG setup | no page found |
 | Licence gating | per-spell `LICENSE` + spell filter | `ACCEPT_LICENSE`, default `-* @FREE` | `LICENCES` + Paludis `licences.conf` |
 | linux-firmware / microcode | main grimoire, marked `GPL` | in tree, needs non-`@FREE` licences | official `hardware` repo |
-| Official libre kernel package | none | none (eclass supports `deblob`, gentoo-sources doesn't use it) | none (no kernel package at all) |
+| Official libre kernel package | none | no linux-libre package, but `rt-sources` has `USE=deblob` (only kernel that enables it) | none (no kernel package at all) |
 | Libre kernel in overlays/repos | none found | none found | none found |
 | On FSF free list | no | no (named on common-distros page) | no |
-| DIY route | custom spell or `deblob-X.Y` | `deblob-X.Y` on sources | linux-libre tarball at the kernel step |
+| DIY route | custom spell or `deblob-X.Y` | `rt-sources` + `deblob`, or manual `deblob-X.Y` on gentoo-sources ([wiki](https://wiki.gentoo.org/wiki/Kernel/Deblobbing)) | linux-libre tarball at the kernel step |
 
 ## What this means for this installer
 
