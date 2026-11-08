@@ -247,9 +247,14 @@ g '(for i in $(seq 30); do curl -fsS -o /dev/null -m 8 https://download.sourcema
 # Credentials are typed into `read -s` in the guest: never echoed (so not in the serial log) and never part of a
 # command line (so not in `ps` on the host).
 if [[ "$DRY_RUN" != 1 ]]; then
+  LOG_OFF=$(stat -c %s "$LOG" 2>/dev/null || echo 0)
   ROOT_PASSWORD="$ROOT_PASSWORD" USER_PASSWORD="$USER_PASSWORD" "${DRIVE[@]}" "$SOCK" "$LOG" secret ROOT_PASSWORD USER_PASSWORD \
     || die "could not pass the passwords to the guest"
-  if grep -qF -- "$ROOT_PASSWORD" "$LOG" || grep -qF -- "$USER_PASSWORD" "$LOG"; then
+  # Only look at what the guest printed during the password step, and only for a password echoed as typed input
+  # (alone on a line, or right after the prompt). A plain substring search would flag short passwords like "1"
+  # that happen to appear in normal console output.
+  leaked() { [[ -n "$1" ]] && tail -c +$((LOG_OFF + 1)) "$LOG" | tr -d '\r' | grep -qxF -e "$1" -e "# $1" -e "#$1"; }
+  if leaked "$ROOT_PASSWORD" || leaked "$USER_PASSWORD"; then
     die "a password showed up in $LOG — stopping (delete that log)"
   fi
 fi
