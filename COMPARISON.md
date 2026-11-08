@@ -363,6 +363,135 @@ Mage asking questions at `cast` time.
 | Main channels | e-mail, mailing lists, IRC, forums ([Contact](https://sourcemage.org/Contact)) | forums, IRC, mailing lists, Bugzilla ([Get involved](https://www.gentoo.org/get-involved/), [Support](https://www.gentoo.org/support/)) | `#exherbo` on Libera.Chat (primary), exherbo-dev mailing list ([expectations](https://exherbo.org/docs/expectations.html)) |
 | Enforcement | not described on that page | Community Relations, appeals to the Council | not described on that page |
 
+## Free software and libre kernels
+
+This builds on [Free software and licensing](#free-software-and-licensing) above. Sources are
+each project's own pages, package trees and the FSF/GNU pages. Where no official page was
+found, it says so.
+
+### Stated stance and licence handling
+
+- **Source Mage**: the [Social Contract](https://sourcemage.org/Social%20Contract) says "Source
+  Mage will remain 100% free" and "we will never make the core system depend on an item of
+  non-free software", but "We will not limit user choice to our free software standards". Each
+  spell carries a `LICENSE` field, and sorcery's spell filter lets you refuse spells by licence.
+  The [Docs](https://sourcemage.org/Docs) index describes the separate Z-rejected grimoire as
+  the place to "use non-free blobs in your free system if you need to".
+- **Gentoo**: the [Social Contract](https://www.gentoo.org/get-started/philosophy/social-contract.html)
+  says Gentoo "will never depend upon a piece of software or metadata" that isn't free, but the
+  tree also packages non-free software. Every ebuild has a `LICENSE`, and Portage only installs
+  what `ACCEPT_LICENSE` allows. The base profile default is `ACCEPT_LICENSE="-* @FREE"`
+  ([profiles/base/make.defaults](https://gitweb.gentoo.org/repo/gentoo.git/plain/profiles/base/make.defaults)).
+  The groups are defined in
+  [profiles/license_groups](https://gitweb.gentoo.org/repo/gentoo.git/plain/profiles/license_groups):
+  `@FREE` is `@FREE-SOFTWARE @FREE-DOCUMENTS`, and `@BINARY-REDISTRIBUTABLE` is `@FREE` plus
+  licences such as `linux-fw-redistributable`, `intel-ucode` and `no-source-code`.
+- **Exherbo**: no page found with a free-software policy or social contract. Packages list their
+  licences in `LICENCES`. Paludis reads accepted licences from `licences.conf`, using the same
+  `-*`, `@GROUP` and `-licence` tokens, and its docs say "Most users will only want" `*/* *`
+  ([Paludis: licences.conf](https://paludis.exherbo.org/configuration/licenses.html)).
+
+### Firmware and microcode
+
+- **Source Mage**: `kernels/linux-firmware` (from kernel.org's linux-firmware git) and
+  `kernels/microcode_ctl` are in the main grimoire
+  ([grimoire](https://codeberg.org/sourcemage/grimoire/src/branch/master/kernels)). Both
+  `DETAILS` files set `LICENSE[0]=GPL`, even though linux-firmware is mostly binary blobs. That
+  means a licence-based spell filter would not catch them.
+- **Gentoo**: `sys-kernel/linux-firmware` has a `+redistributable` USE flag. When it is set,
+  the package's `LICENSE` adds `linux-fw-redistributable`. With `-redistributable`, the ebuild
+  removes the non-redistributable files
+  ([ebuild](https://gitweb.gentoo.org/repo/gentoo.git/tree/sys-kernel/linux-firmware),
+  [package page](https://packages.gentoo.org/packages/sys-kernel/linux-firmware)).
+  `sys-firmware/intel-microcode` is under `intel-ucode`
+  ([package page](https://packages.gentoo.org/packages/sys-firmware/intel-microcode)). Neither
+  licence is in `@FREE`, so the default `ACCEPT_LICENSE` refuses both until you accept them,
+  for example with `@BINARY-REDISTRIBUTABLE`.
+- **Exherbo**: `firmware/linux-firmware` and `firmware/intel-microcode` are in the official
+  `hardware` repository, together with other blobs such as `b43-firmware` and `ipw2200-firmware`
+  ([summer: hardware](https://summer.exherbo.org/repositories/hardware/index.html)).
+  linux-firmware lists each vendor licence in `LICENCES`
+  ([exlib](https://gitlab.exherbo.org/exherbo/hardware/-/blob/master/packages/firmware/linux-firmware/linux-firmware.exlib)),
+  and intel-microcode uses `LICENCES="intel-ucode"`. The install guide says to
+  `cave resolve linux-firmware` if you need it, for example for an Intel wireless card
+  ([install guide](https://exherbo.org/docs/install-guide.html)).
+
+### Libre kernels
+
+[GNU Linux-libre](https://www.fsfla.org/ikiwiki/selibre/linux-libre/) is the FSFLA's
+deblobbed Linux. The FSF's free distros all ship it or an equivalent.
+
+- **Source Mage**: no linux-libre spell. The grimoire's `kernels/` section has `linux`, but no
+  libre or deblob spell, and no deblob files in the `linux` spell
+  ([kernels/](https://codeberg.org/sourcemage/grimoire/src/branch/master/kernels)).
+- **Gentoo**: no `linux-libre` package in the official tree
+  ([packages.gentoo.org search](https://packages.gentoo.org/packages/search?q=linux-libre)).
+  None of the registered overlays is named for it
+  ([repositories.xml](https://api.gentoo.org/overlays/repositories.xml)), and the
+  [gpo.zugaina.org](https://gpo.zugaina.org/Search?search=linux-libre) overlay index search found
+  no kernel package. The Gentoo wiki has no `Linux-libre` page (404). However,
+  [kernel-2.eclass](https://gitweb.gentoo.org/repo/gentoo.git/plain/eclass/kernel-2.eclass) has
+  built-in optional deblobbing ("deblob for libre support"): it adds a `deblob` USE flag when an
+  ebuild sets `K_DEBLOB_AVAILABLE=1`. The current
+  [gentoo-sources ebuild](https://gitweb.gentoo.org/repo/gentoo.git/tree/sys-kernel/gentoo-sources)
+  does not set it, so there's no `deblob` flag there.
+- **Exherbo**: no linux-libre package. Exherbo has no kernel package at all; `sys-kernel` only
+  holds `caitsith`, `dkms`, `linux-headers` and `lux`
+  ([summer: sys-kernel](https://summer.exherbo.org/packages/sys-kernel/index.html)). The install
+  guide has you download and build a kernel from kernel.org yourself
+  ([install guide](https://exherbo.org/docs/install-guide.html)). A search of summer's
+  repository listings found no libre kernel in any of them.
+
+**Deblobbing yourself** works the same way on all three. Each Linux-libre release publishes
+`deblob-<major.minor>` and `deblob-check` (with `.sign` signatures), for example
+[releases/7.3.3-gnu/](https://linux-libre.fsfla.org/pub/linux-libre/releases/7.3.3-gnu/).
+You run the matching `deblob-X.Y` in a vanilla kernel.org tree of that version, or you download
+the already-cleaned `linux-libre` tarball from the same directory and build that. The project
+also keeps scripts and tags in `git://linux-libre.fsfla.org/releases.git`
+([project page](https://www.fsfla.org/ikiwiki/selibre/linux-libre/)).
+
+### FSF free-distro list
+
+None of the three is on the FSF's
+[free GNU/Linux distributions](https://www.gnu.org/distros/free-distros.html) list. That page
+does not mention Gentoo, Exherbo or Source Mage. On
+[Why we don't endorse some common distros](https://www.gnu.org/distros/common-distros.html),
+only Gentoo is named: "Gentoo includes installation recipes for a number of nonfree programs in
+its primary package system." Exherbo and Source Mage do not appear there.
+
+### What a libre build needs with these installers
+
+- **This repo (`install.sh`)**: the kernel is the grimoire's `linux` spell, cast in the core
+  phase (`SPELLS_CORE`). When run unattended, it writes `/etc/sorcery/local/depends/linux.p`
+  with the newest `LATEST_<n>` series from `kernels/linux/latest.defaults`, plus that series'
+  maintenance patches, and builds from `make defconfig` (or `kernel/vm.config` for
+  `PROFILE=vm`). No spell deblobs it, so a libre kernel means one of two things: add a
+  `linux-libre` spell to this repo's local `grimoire/kernels/` and cast it instead of `linux`,
+  or run `deblob-X.Y` on the source before the build. Firmware is a separate list:
+  `SPELLS_MAC` (`linux-firmware microcode_ctl … broadcom-wl`) is only added for
+  `PROFILE=macbookair`, and the VM profile casts no firmware. `broadcom-wl` (the proprietary
+  Broadcom driver, in this repo's `grimoire/`) is what the MacBook Air's Wi-Fi uses. Dropping it
+  would leave that card without a driver unless you add another card.
+- **[legenddots Gentoo installer](https://github.com/legendarymsr/legenddots/blob/master/gentoo/install.sh)**:
+  emerges `gentoo-sources`, `linux-firmware` and `intel-microcode`. To swap the kernel, you'd
+  deblob the tree yourself and leave the two firmware packages out, keeping `ACCEPT_LICENSE` at
+  `@FREE`.
+- **[legenddots Exherbo setup](https://github.com/legendarymsr/legenddots/blob/master/exherbo/exherbo-setup.sh)**:
+  already builds the kernel from kernel.org, so you'd fetch the linux-libre tarball (or run
+  `deblob-X.Y`) at that step and skip `cave resolve linux-firmware`.
+
+### Summary
+
+| | Source Mage | Gentoo | Exherbo |
+|---|---|---|---|
+| Free-software policy | Social Contract: 100% free core, user choice | Social Contract: free, but non-free in tree | no page found |
+| Licence gating | per-spell `LICENSE` + spell filter | `ACCEPT_LICENSE`, default `-* @FREE` | `LICENCES` + Paludis `licences.conf` |
+| linux-firmware / microcode | main grimoire, marked `GPL` | in tree, needs non-`@FREE` licences | official `hardware` repo |
+| Official libre kernel package | none | none (eclass supports `deblob`, gentoo-sources doesn't use it) | none (no kernel package at all) |
+| Libre kernel in overlays/repos | none found | none found | none found |
+| On FSF free list | no | no (named on common-distros page) | no |
+| DIY route | custom spell or `deblob-X.Y` | `deblob-X.Y` on sources | linux-libre tarball at the kernel step |
+
 ## What this means for this installer
 
 Source Mage asks its questions during the build, not in config files, so an unattended
