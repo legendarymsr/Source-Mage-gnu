@@ -223,6 +223,13 @@ Because it runs commands as you, it is locked down:
 - requests with a foreign `Host` header are refused (DNS rebinding), running needs a `POST`, bodies over 8 KB are refused
 - `super+w` runs `www-open`, which hands the token to Dillo through a `0600` file, so it never appears in `ps`
 - `~/www` (index and the static fastfetch page) is served without a token and holds no secrets
+- **commands cannot roam your filesystem.** Each one runs in a Landlock sandbox: it can read the system (`/usr`, `/bin`,
+  `/lib`, `/etc`, `/proc`, `/sys`) and read+write only the jail directory, `~/www` by default (`WWW_JAIL=/path` changes it)
+  and `/dev`. The rest of your home (`~/.ssh`, `~/.cache/www-token`, other projects) is invisible to them, writes outside
+  the jail fail, `cd` outside it is refused, and `HOME`/`TMPDIR` point into the jail. Landlock is a kernel feature
+  (`CONFIG_SECURITY_LANDLOCK`, enabled in `kernel/vm.config`; on real hardware tick it in the kernel menu): **without it the
+  terminal refuses to run commands** instead of running unconfined (`WWW_UNCONFINED=1` opts out; `WWW_RO=/a:/b` adds
+  read-only directories)
 
 **neovim in Dillo.** Dillo has no JavaScript, so it cannot host an interactive editor. `rice/dillo/nvim-html` starts the real
 nvim (your `init.lua` and plugins) in a pseudo-terminal, reads its screen back with a small terminal emulator and writes

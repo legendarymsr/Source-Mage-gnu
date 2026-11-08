@@ -6,13 +6,19 @@
 # pseudo-terminal (colours, fastfetch, ls --color ... work); `cd` persists, `clear` empties the screen. No full-screen
 # programs (top, nvim...): there is no terminal on the other end. Each command has a 25 s limit.
 #
+# CONFINEMENT: commands run inside a Landlock sandbox (Linux 5.13+, needs CONFIG_SECURITY_LANDLOCK): they can read the
+# system (/usr /bin /lib /etc /proc /sys, ...) and read+write only the jail directory (default ~/www) and /dev. The rest
+# of your home (~/.ssh, ~/.cache/www-token, other projects...) is invisible to them, and `cd` outside the jail is
+# refused. Without Landlock the terminal refuses to run commands rather than run unconfined (WWW_UNCONFINED=1 opts out).
+# WWW_JAIL=/path changes the jail; WWW_RO=/a:/b adds read-only directories.
+#
 # SECURITY: this runs commands as you, so it is locked down. A random token is made at start and kept in
 # ~/.cache/www-token (mode 0600, directory 0700). The terminal page and the run endpoint need that token, requests with
 # a foreign Host header are refused (DNS rebinding), and running needs a POST. The launcher (www-open) hands the token
 # to Dillo through a 0600 file, so it never appears in a process list. ~/www (index.html, fastfetch.html) is served
 # without a token: it holds no secrets and runs nothing. fastfetch.html is regenerated on every load.
 
-import fcntl, functools, hmac, html, http.server, importlib.machinery, importlib.util, os, pty, secrets, select
+import ctypes, fcntl, functools, hmac, html, http.server, importlib.machinery, importlib.util, os, pty, secrets, select
 import signal, socket, struct, subprocess, sys, termios, threading, time, urllib.parse
 
 HOME = os.path.expanduser("~")
@@ -24,6 +30,62 @@ PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8080
 HOST_OK = {"localhost:%d" % PORT, "127.0.0.1:%d" % PORT}
 COLS, ROWS, LIMIT_S, CAP = 100, 30, 25, 200_000
 SHELL = os.environ.get("SHELL", "/bin/bash")
+JAIL = os.path.realpath(os.environ.get("WWW_JAIL") or ROOT)       # the only place commands can write (and cd to)
+UNCONFINED = os.environ.get("WWW_UNCONFINED") == "1"
+RO_PATHS = ["/usr", "/bin", "/sbin", "/lib", "/lib64", "/lib32", "/etc", "/opt", "/proc", "/sys", "/var/state/sorcery",
+            os.path.join(HOME, ".config", "fastfetch")] + [p for p in os.environ.get("WWW_RO", "").split(":") if p]
+RW_PATHS = [JAIL, "/dev"]                                         # /dev: /dev/null, the pty, ...
+
+# ── Landlock (no external tools: three syscalls through ctypes) ───────────────
+_libc = ctypes.CDLL(None, use_errno=True)
+_SYS_CREATE, _SYS_ADD, _SYS_RESTRICT = 444, 445, 446              # same numbers on every architecture
+_EXEC, _WRITE, _READ, _READDIR = 1 << 0, 1 << 1, 1 << 2, 1 << 3
+_FILE_BITS = _EXEC | _WRITE | _READ | (1 << 14)                   # what a plain file can be granted (+ TRUNCATE)
+
+
+def landlock_abi():
+    return _libc.syscall(_SYS_CREATE, None, 0, 1)                 # the "version" flag: -1 if unsupported/disabled
+
+
+def landlock_confine(ro, rw):
+    """Restrict the calling process (and its children, irreversibly) to read ro, read+write rw. Raises OSError."""
+    abi = landlock_abi()
+    if abi < 1:
+        raise OSError(ctypes.get_errno() or 38, "Landlock is not available")
+    handled = (1 << 13) - 1                                       # execute, read/write, make/remove everything
+    if abi >= 2: handled |= 1 << 13                               # REFER (rename/link across directories)
+    if abi >= 3: handled |= 1 << 14                               # TRUNCATE
+    attr = ctypes.create_string_buffer(8)
+    attr.raw = handled.to_bytes(8, "little")
+    fd = _libc.syscall(_SYS_CREATE, attr, 8, 0)
+    if fd < 0:
+        raise OSError(ctypes.get_errno(), "landlock_create_ruleset")
+    for paths, base in ((ro, _EXEC | _READ | _READDIR), (rw, handled)):
+        for path in paths:
+            try:
+                pfd = os.open(path, os.O_PATH | os.O_CLOEXEC)
+            except OSError:
+                continue                                          # a directory this system does not have
+            try:
+                access = base & handled
+                if not os.path.isdir(path):
+                    access &= _FILE_BITS
+                rule = ctypes.create_string_buffer(12)            # struct landlock_path_beneath_attr (packed)
+                rule.raw = access.to_bytes(8, "little") + pfd.to_bytes(4, "little", signed=True)
+                if _libc.syscall(_SYS_ADD, fd, 1, rule, 0) < 0:
+                    raise OSError(ctypes.get_errno(), "landlock_add_rule " + path)
+            finally:
+                os.close(pfd)
+    if _libc.prctl(38, 1, 0, 0, 0) < 0:                           # PR_SET_NO_NEW_PRIVS
+        raise OSError(ctypes.get_errno(), "prctl")
+    if _libc.syscall(_SYS_RESTRICT, fd, 0) < 0:
+        raise OSError(ctypes.get_errno(), "landlock_restrict_self")
+    os.close(fd)
+
+
+def inside_jail(path):
+    path = os.path.realpath(path)
+    return path == JAIL or path.startswith(JAIL + os.sep)
 
 # reuse the ANSI -> HTML converter and the palette from fastfetch-html
 _l = importlib.machinery.SourceFileLoader("fastfetch_html", GEN)
@@ -39,7 +101,7 @@ with os.fdopen(fd, "w") as f:
     f.write(TOKEN + "\n")
 
 LOCK = threading.Lock()                  # one command at a time keeps cwd/history simple
-STATE = {"cwd": HOME, "history": [], "started": False, "n": 0}   # history: (prompt, command, output_ansi)
+STATE = {"cwd": JAIL, "history": [], "started": False, "n": 0}   # history: (prompt, command, output_ansi)
 
 PREAMBLE = ('ls() { command ls --color=auto "$@"; }; grep() { command grep --color=auto "$@"; }; '
             'diff() { command diff --color=auto "$@"; }\n')
@@ -54,15 +116,34 @@ def prompt_for(cwd):
 
 
 def run_command(cmd, cwd):
-    """Run cmd in a bash with a real pty. Returns (output, new_cwd)."""
+    """Run cmd in a bash with a real pty, inside the Landlock jail. Returns (output, new_cwd)."""
+    if not UNCONFINED and landlock_abi() < 1:
+        return ("[commands are disabled: this kernel has no Landlock, so they could not be confined to %s.\r\n"
+                " Enable CONFIG_SECURITY_LANDLOCK (kernel/vm.config has it), or start www-server with WWW_UNCONFINED=1"
+                " to run unconfined.]" % short_cwd(JAIL), cwd)
+    if not inside_jail(cwd):
+        cwd = JAIL
+    tmp = os.path.join(JAIL, ".tmp")
+    os.makedirs(tmp, exist_ok=True)
     master, slave = pty.openpty()
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", ROWS, COLS, 0, 0))
     script = PREAMBLE + cmd + '\n__rc=$?; printf "\\n__SMGL_CWD__%s\\n" "$PWD"; exit $__rc'
-    env = dict(os.environ, TERM="xterm-256color", COLORTERM="truecolor", COLUMNS=str(COLS), LINES=str(ROWS))
-    env.pop("TERM_PROGRAM", None)
-    p = subprocess.Popen([SHELL, "--noprofile", "--norc", "-c", script], cwd=cwd, env=env, stdin=slave, stdout=slave,
-                         stderr=slave, start_new_session=True, close_fds=True,
-                         preexec_fn=lambda: fcntl.ioctl(0, termios.TIOCSCTTY, 0))
+    # a small environment of our own, not everything the server inherited; HOME is the jail so tools stay inside it
+    env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "TERM": "xterm-256color", "COLORTERM": "truecolor",
+           "COLUMNS": str(COLS), "LINES": str(ROWS), "HOME": JAIL, "TMPDIR": tmp, "SHELL": SHELL,
+           "USER": os.environ.get("USER", ""), "LANG": os.environ.get("LANG", "C")}
+
+    def child():
+        fcntl.ioctl(0, termios.TIOCSCTTY, 0)
+        if not UNCONFINED:
+            landlock_confine(RO_PATHS, RW_PATHS)
+
+    try:
+        p = subprocess.Popen([SHELL, "--noprofile", "--norc", "-c", script], cwd=cwd, env=env, stdin=slave,
+                             stdout=slave, stderr=slave, start_new_session=True, close_fds=True, preexec_fn=child)
+    except (subprocess.SubprocessError, OSError) as e:
+        os.close(master); os.close(slave)
+        return "[could not start the confined shell: %s]" % e, cwd
     os.close(slave)
     out, deadline, timed_out = b"", time.time() + LIMIT_S, False
     while True:
@@ -99,7 +180,10 @@ def run_command(cmd, cwd):
         head, _, tail = text.rpartition(marker)
         cand = tail.splitlines()[0].strip() if tail.splitlines() else ""
         if cand and os.path.isdir(cand):
-            new_cwd = cand
+            if inside_jail(cand):
+                new_cwd = cand
+            else:
+                head += "\r\n[cd outside %s refused: the terminal is confined there]" % short_cwd(JAIL)
         text = head.rstrip("\r\n")
     return text, new_cwd
 
@@ -185,7 +269,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 if not STATE["started"]:
                     STATE["started"] = True
                     out, STATE["cwd"] = run_command("fastfetch", STATE["cwd"])
-                    STATE["history"].append((prompt_for(HOME), "fastfetch", out))
+                    STATE["history"].append((prompt_for(STATE["cwd"]), "fastfetch", out))
                 return self._send(page())
         if url.path == "/fastfetch.html" and os.path.exists(GEN):   # public, no secrets: regenerated on every load
             try:
